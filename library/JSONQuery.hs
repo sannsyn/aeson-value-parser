@@ -18,20 +18,20 @@ run :: Q a -> JSON -> [a]
 run = 
   runKleisli
 
-value :: Text -> Q JSON
-value name =
+by :: Text -> Q JSON
+by name =
   Kleisli $ \case
     Aeson.Object m -> toList $ HashMap.lookup name m
     _ -> []
 
-element :: Int -> Q JSON
-element index =
+at :: Int -> Q JSON
+at index =
   Kleisli $ \case
     Aeson.Array v -> toList $ v Vector.!? index
     _ -> []
 
-child :: Q JSON
-child =
+each :: Q JSON
+each =
   Kleisli $ \case
     Aeson.Object m -> HashMap.elems m
     Aeson.Array v -> toList v
