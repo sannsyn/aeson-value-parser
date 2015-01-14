@@ -11,15 +11,41 @@ import qualified Data.Vector as Vector
 type JSON = 
   Aeson.Value
 
-type Q a =
-  JSON -> Either Text a
+newtype Q a =
+  Q (JSON -> Either Text a)
+  deriving (Functor)
+
+instance Applicative Q where
+  pure = 
+    Q . const . Right
+  (<*>) a b =
+    Q $ \j -> ($) <$> run a j <*> run b j
+
+instance Monad Q where
+  return = 
+    pure
+  (>>=) m k = 
+    join $ fmap k m
+
+instance Alternative Q where
+  empty = 
+    Q $ const $ Left "No result"
+  (<|>) a b =
+    Q $ \j -> 
+      case run a j of
+        Left _ -> run b j
+        r -> r
+
+instance MonadPlus Q where
+  mzero = empty
+  mplus = (<|>)
 
 run :: Q a -> JSON -> Either Text a
-run = id
+run = \(Q f) -> f
 
 value :: Text -> Q JSON
 value name =
-  \case
+  Q $ \case
     Aeson.Object m -> 
       maybe (Left $ "Object contains no field '" <> name <> "'") Right $
       HashMap.lookup name m
@@ -28,7 +54,7 @@ value name =
 
 element :: Int -> Q JSON
 element index =
-  \case
+  Q $ \case
     Aeson.Array v ->
       maybe (Left $ "Array has no index '" <> (fromString . show) index <> "'") Right $
       v Vector.!? index
@@ -37,7 +63,7 @@ element index =
 
 string :: Q Text
 string =
-  \case
+  Q $ \case
     Aeson.String t ->
       Right t
     _ ->
@@ -45,7 +71,7 @@ string =
 
 number :: Q Scientific
 number =
-  \case
+  Q $ \case
     Aeson.Number x ->
       Right x
     _ ->
@@ -53,7 +79,7 @@ number =
 
 bool :: Q Bool
 bool =
-  \case
+  Q $ \case
     Aeson.Bool x -> 
       Right x
     _ -> 
@@ -61,7 +87,7 @@ bool =
 
 nullable :: Q a -> Q (Maybe a)
 nullable q =
-  \case
+  Q $ \case
     Aeson.Null ->
       Right Nothing
     x -> 
@@ -69,7 +95,7 @@ nullable q =
 
 arrayOf :: Q a -> Q (Vector.Vector a)
 arrayOf q =
-  \case
+  Q $ \case
     Aeson.Array v ->
       Vector.mapM (run q) v
     _ ->
@@ -77,7 +103,7 @@ arrayOf q =
 
 objectOf :: Q a -> Q (HashMap.HashMap Text a)
 objectOf q =
-  \case
+  Q $ \case
     Aeson.Object m ->
       mapM (run q) m
     _ ->
@@ -85,7 +111,7 @@ objectOf q =
 
 fromJSON :: Aeson.FromJSON a => Q a
 fromJSON =
-  Aeson.fromJSON >>> \case
-    Aeson.Error m -> Left $ fromString m
-    Aeson.Success r -> Right $ r
-
+  Q $
+    Aeson.fromJSON >>> \case
+      Aeson.Error m -> Left $ fromString m
+      Aeson.Success r -> Right $ r
