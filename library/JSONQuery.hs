@@ -11,107 +11,93 @@ import qualified Data.Vector as Vector
 type JSON = 
   Aeson.Value
 
-newtype Q a =
-  Q (JSON -> Either Text a)
-  deriving (Functor)
+type Q a =
+  JSON -> Result a
 
-instance Applicative Q where
-  pure = 
-    Q . const . Right
-  (<*>) a b =
-    Q $ \j -> ($) <$> run a j <*> run b j
+newtype Result a =
+  Result { resultEither :: Either Text a }
+  deriving (Functor, Applicative, Monad)
 
-instance Monad Q where
-  return = 
-    pure
-  (>>=) m k = 
-    join $ fmap k m
-
-instance Alternative Q where
+instance Alternative Result where
   empty = 
-    Q $ const $ Left "No result"
-  (<|>) a b =
-    Q $ \j -> 
-      case run a j of
-        Left _ -> run b j
-        r -> r
+    Result $ Left "No result"
+  (<|>) =
+    \case
+      Result (Left _) -> id
+      r -> const r
 
-instance MonadPlus Q where
+instance MonadPlus Result where
   mzero = empty
   mplus = (<|>)
 
-run :: Q a -> JSON -> Either Text a
-run = \(Q f) -> f
-
 value :: Text -> Q JSON
 value name =
-  Q $ \case
+  \case
     Aeson.Object m -> 
-      maybe (Left $ "Object contains no field '" <> name <> "'") Right $
+      maybe (Result $ Left $ "Object contains no field '" <> name <> "'") return $
       HashMap.lookup name m
     _ ->
-      Left "Not an object"
+      Result $ Left "Not an object"
 
 element :: Int -> Q JSON
 element index =
-  Q $ \case
+  \case
     Aeson.Array v ->
-      maybe (Left $ "Array has no index '" <> (fromString . show) index <> "'") Right $
+      maybe (Result $ Left $ "Array has no index '" <> (fromString . show) index <> "'") return $
       v Vector.!? index
     _ ->
-      Left "Not an array"
+      Result $ Left "Not an array"
 
 string :: Q Text
 string =
-  Q $ \case
+  \case
     Aeson.String t ->
-      Right t
+      return t
     _ ->
-      Left "Not a string"
+      Result $ Left "Not a string"
 
 number :: Q Scientific
 number =
-  Q $ \case
+  \case
     Aeson.Number x ->
-      Right x
+      return x
     _ ->
-      Left "Not a number"
+      Result $ Left "Not a number"
 
 bool :: Q Bool
 bool =
-  Q $ \case
+  \case
     Aeson.Bool x -> 
-      Right x
+      return x
     _ -> 
-      Left "Not a bool"
+      Result $ Left "Not a bool"
 
 nullable :: Q a -> Q (Maybe a)
 nullable q =
-  Q $ \case
+  \case
     Aeson.Null ->
-      Right Nothing
+      return Nothing
     x -> 
-      fmap Just $ run q x
+      fmap Just $ q x
 
 arrayOf :: Q a -> Q (Vector.Vector a)
 arrayOf q =
-  Q $ \case
+  \case
     Aeson.Array v ->
-      Vector.mapM (run q) v
+      Vector.mapM q v
     _ ->
-      Left "Not an array"
+      Result $ Left "Not an array"
 
 objectOf :: Q a -> Q (HashMap.HashMap Text a)
 objectOf q =
-  Q $ \case
+  \case
     Aeson.Object m ->
-      mapM (run q) m
+      mapM q m
     _ ->
-      Left "Not an object"
+      Result $ Left "Not an object"
 
 fromJSON :: Aeson.FromJSON a => Q a
 fromJSON =
-  Q $
-    Aeson.fromJSON >>> \case
-      Aeson.Error m -> Left $ fromString m
-      Aeson.Success r -> Right $ r
+  Aeson.fromJSON >>> \case
+    Aeson.Error m -> Result $ Left $ fromString m
+    Aeson.Success r -> return $ r
