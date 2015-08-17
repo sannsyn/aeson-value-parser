@@ -1,4 +1,4 @@
-module JSONQuery where
+module Aeson.Query where
 
 import BasePrelude hiding (bool)
 import Data.Text (Text)
@@ -11,7 +11,7 @@ import qualified Data.Vector as Vector
 type JSON = 
   Aeson.Value
 
-type Q a =
+type Query a =
   JSON -> Result a
 
 newtype Result a =
@@ -30,7 +30,7 @@ instance MonadPlus Result where
   mzero = empty
   mplus = (<|>)
 
-value :: Text -> Q JSON
+value :: Text -> Query JSON
 value name =
   \case
     Aeson.Object m -> 
@@ -39,7 +39,7 @@ value name =
     _ ->
       Result $ Left "Not an object"
 
-element :: Int -> Q JSON
+element :: Int -> Query JSON
 element index =
   \case
     Aeson.Array v ->
@@ -48,7 +48,7 @@ element index =
     _ ->
       Result $ Left "Not an array"
 
-string :: Q Text
+string :: Query Text
 string =
   \case
     Aeson.String t ->
@@ -56,7 +56,7 @@ string =
     _ ->
       Result $ Left "Not a string"
 
-number :: Q Scientific
+number :: Query Scientific
 number =
   \case
     Aeson.Number x ->
@@ -64,7 +64,7 @@ number =
     _ ->
       Result $ Left "Not a number"
 
-bool :: Q Bool
+bool :: Query Bool
 bool =
   \case
     Aeson.Bool x -> 
@@ -72,7 +72,7 @@ bool =
     _ -> 
       Result $ Left "Not a bool"
 
-nullable :: Q a -> Q (Maybe a)
+nullable :: Query a -> Query (Maybe a)
 nullable q =
   \case
     Aeson.Null ->
@@ -80,7 +80,7 @@ nullable q =
     x -> 
       fmap Just $ q x
 
-arrayOf :: Q a -> Q (Vector.Vector a)
+arrayOf :: Query a -> Query (Vector.Vector a)
 arrayOf q =
   \case
     Aeson.Array v ->
@@ -88,7 +88,7 @@ arrayOf q =
     _ ->
       Result $ Left "Not an array"
 
-objectOf :: Q a -> Q (HashMap.HashMap Text a)
+objectOf :: Query a -> Query (HashMap.HashMap Text a)
 objectOf q =
   \case
     Aeson.Object m ->
@@ -96,7 +96,7 @@ objectOf q =
     _ ->
       Result $ Left "Not an object"
 
-fromJSON :: Aeson.FromJSON a => Q a
+fromJSON :: Aeson.FromJSON a => Query a
 fromJSON =
   Aeson.fromJSON >>> \case
     Aeson.Error m -> Result $ Left $ fromString m
