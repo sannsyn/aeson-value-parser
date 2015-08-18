@@ -1,6 +1,7 @@
 module Aeson.Query where
 
 import BasePrelude hiding (bool)
+import MTLPrelude
 import Data.Text (Text)
 import Data.Scientific (Scientific)
 import qualified Data.Aeson as Aeson
@@ -8,15 +9,13 @@ import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Vector as Vector
 
 
-type JSON = 
-  Aeson.Value
-
-type Query a =
-  JSON -> Result a
+newtype Query a =
+  Query (ReaderT Aeson.Value Result a)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Text)
 
 newtype Result a =
   Result { resultEither :: Either Text a }
-  deriving (Functor, Applicative, Monad)
+  deriving (Functor, Applicative, Monad, MonadError Text)
 
 instance Alternative Result where
   empty = 
@@ -30,18 +29,22 @@ instance MonadPlus Result where
   mzero = empty
   mplus = (<|>)
 
-value :: Text -> Query JSON
+run :: Query a -> Aeson.Value -> Either Text a
+run (Query reader) value =
+  runReaderT reader value & \(Result either) -> either
+
+value :: Text -> Query Aeson.Value
 value name =
-  \case
+  Query $ ReaderT $ \case
     Aeson.Object m -> 
       maybe (Result $ Left $ "Object contains no field '" <> name <> "'") return $
       HashMap.lookup name m
     _ ->
       Result $ Left "Not an object"
 
-element :: Int -> Query JSON
+element :: Int -> Query Aeson.Value
 element index =
-  \case
+  Query $ ReaderT $ \case
     Aeson.Array v ->
       maybe (Result $ Left $ "Array has no index '" <> (fromString . show) index <> "'") return $
       v Vector.!? index
@@ -50,7 +53,7 @@ element index =
 
 string :: Query Text
 string =
-  \case
+  Query $ ReaderT $ \case
     Aeson.String t ->
       return t
     _ ->
@@ -58,7 +61,7 @@ string =
 
 number :: Query Scientific
 number =
-  \case
+  Query $ ReaderT $ \case
     Aeson.Number x ->
       return x
     _ ->
@@ -66,7 +69,7 @@ number =
 
 bool :: Query Bool
 bool =
-  \case
+  Query $ ReaderT $ \case
     Aeson.Bool x -> 
       return x
     _ -> 
@@ -74,30 +77,30 @@ bool =
 
 nullable :: Query a -> Query (Maybe a)
 nullable q =
-  \case
+  Query $ ReaderT $ \case
     Aeson.Null ->
       return Nothing
     x -> 
-      fmap Just $ q x
+      Result $ fmap Just $ run q x
 
 arrayOf :: Query a -> Query (Vector.Vector a)
 arrayOf q =
-  \case
+  Query ask >>= \case
     Aeson.Array v ->
-      Vector.mapM q v
+      Query $ lift $ Result $ Vector.mapM (run q) v
     _ ->
-      Result $ Left "Not an array"
+      Query $ lift $ Result $ Left "Not an array"
 
 objectOf :: Query a -> Query (HashMap.HashMap Text a)
 objectOf q =
-  \case
+  Query ask >>= Query . lift . Result . \case
     Aeson.Object m ->
-      mapM q m
+      mapM (run q) m
     _ ->
-      Result $ Left "Not an object"
+      Left "Not an object"
 
 fromJSON :: Aeson.FromJSON a => Query a
 fromJSON =
-  Aeson.fromJSON >>> \case
+  Query $ ReaderT $ Aeson.fromJSON >>> \case
     Aeson.Error m -> Result $ Left $ fromString m
-    Aeson.Success r -> return $ r
+    Aeson.Success r -> Result $ Right $ r
