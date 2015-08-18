@@ -4,14 +4,10 @@ import BasePrelude hiding (bool)
 import MTLPrelude
 import Data.Text (Text)
 import Data.Scientific (Scientific)
-import qualified Data.Aeson as Aeson
-import qualified Data.HashMap.Strict as HashMap
-import qualified Data.Vector as Vector
+import qualified Data.Aeson as A
+import qualified Data.HashMap.Strict as B
+import qualified Data.Vector as C
 
-
-newtype Query a =
-  Query (ReaderT Aeson.Value Result a)
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Text)
 
 newtype Result a =
   Result { resultEither :: Either Text a }
@@ -29,82 +25,92 @@ instance MonadPlus Result where
   mzero = empty
   mplus = (<|>)
 
-run :: Query a -> Aeson.Value -> Either Text a
-run (Query reader) value =
-  runReaderT reader value & \(Result either) -> either
 
-onValue :: Text -> Query a -> Query a
-onValue name cont =
-  Query $ ReaderT $ \case
-    Aeson.Object m -> do
-      v <- 
-        maybe (Result $ Left $ "Object contains no field '" <> name <> "'") return $
-        HashMap.lookup name m
-      Result $ run cont v
-    _ ->
-      Result $ Left "Not an object"
 
-onElement :: Int -> Query a -> Query a
-onElement index cont =
-  Query $ ReaderT $ \case
-    Aeson.Array v -> do
-      v <-
-        maybe (Result $ Left $ "Array has no index '" <> (fromString . show) index <> "'") return $
-        v Vector.!? index
-      Result $ run cont v
+type ValueParser =
+  ReaderT A.Value Result
+
+type ArrayParser =
+  ReaderT A.Array Result
+
+type ObjectParser =
+  ReaderT A.Object Result
+
+run :: ValueParser a -> A.Value -> Either Text a
+run effect =
+  resultEither . runReaderT effect
+
+-- * Value parsers
+-------------------------
+
+onArray :: ArrayParser a -> ValueParser a
+onArray effect =
+  ReaderT $ \case
+    A.Array x ->
+      runReaderT effect x
     _ ->
       Result $ Left "Not an array"
 
-onNullable :: Query a -> Query (Maybe a)
+onNullable :: ValueParser a -> ValueParser (Maybe a)
 onNullable q =
-  Query $ ReaderT $ \case
-    Aeson.Null ->
+  ReaderT $ \case
+    A.Null ->
       return Nothing
     x -> 
       Result $ fmap Just $ run q x
 
-onArrayOf :: Query a -> Query (Vector.Vector a)
-onArrayOf q =
-  Query ask >>= \case
-    Aeson.Array v ->
-      Query $ lift $ Result $ Vector.mapM (run q) v
-    _ ->
-      Query $ lift $ Result $ Left "Not an array"
-
-onObjectOf :: Query a -> Query (HashMap.HashMap Text a)
-onObjectOf q =
-  Query ask >>= Query . lift . Result . \case
-    Aeson.Object m ->
-      mapM (run q) m
-    _ ->
-      Left "Not an object"
-
-string :: Query Text
+string :: ValueParser Text
 string =
-  Query $ ReaderT $ \case
-    Aeson.String t ->
+  ReaderT $ \case
+    A.String t ->
       return t
     _ ->
       Result $ Left "Not a string"
 
-number :: Query Scientific
+number :: ValueParser Scientific
 number =
-  Query $ ReaderT $ \case
-    Aeson.Number x ->
+  ReaderT $ \case
+    A.Number x ->
       return x
     _ ->
       Result $ Left "Not a number"
 
-bool :: Query Bool
+bool :: ValueParser Bool
 bool =
-  Query $ ReaderT $ \case
-    Aeson.Bool x -> 
+  ReaderT $ \case
+    A.Bool x -> 
       return x
     _ -> 
       Result $ Left "Not a bool"
 
-fromJSON :: Aeson.FromJSON a => Query a
-fromJSON =
-  Query $ ReaderT $ Aeson.fromJSON >>> \case
-    Aeson.Error m -> Result $ Left $ fromString m
-    Aeson.Success r -> Result $ Right $ r
+value :: A.FromJSON a => ValueParser a
+value =
+  ReaderT $ A.fromJSON >>> \case
+    A.Error m -> Result $ Left $ fromString m
+    A.Success r -> Result $ Right $ r
+
+-- * Object parsers
+-------------------------
+
+onKey :: Text -> ValueParser a -> ObjectParser a
+onKey key effect =
+  ReaderT $
+    maybe (Result $ Left $ "Object contains no field '" <> key <> "'") (runReaderT effect) .
+    B.lookup key
+
+onAllKeys :: ValueParser a -> ObjectParser (B.HashMap Text a)
+onAllKeys effect =
+  ReaderT $ mapM (runReaderT effect)
+
+-- * Array parsers
+-------------------------
+
+onIndex :: Int -> ValueParser a -> ArrayParser a
+onIndex index effect =
+  ReaderT $ 
+    maybe (Result $ Left $ "Array has no index '" <> (fromString . show) index <> "'") (runReaderT effect) .
+    flip (C.!?) index
+
+onAllIndexes :: ValueParser a -> ArrayParser (C.Vector a)
+onAllIndexes effect =
+  ReaderT $ mapM (runReaderT effect)
