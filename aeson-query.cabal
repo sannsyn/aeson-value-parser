@@ -1,7 +1,7 @@
 name:
   aeson-query
 version:
-  0.6.0
+  0.7.0
 synopsis:
   An API for parsing "aeson" JSON tree into Haskell types
 description:

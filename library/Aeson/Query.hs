@@ -33,23 +33,51 @@ run :: Query a -> Aeson.Value -> Either Text a
 run (Query reader) value =
   runReaderT reader value & \(Result either) -> either
 
-value :: Text -> Query Aeson.Value
-value name =
+onValue :: Text -> Query a -> Query a
+onValue name cont =
   Query $ ReaderT $ \case
-    Aeson.Object m -> 
-      maybe (Result $ Left $ "Object contains no field '" <> name <> "'") return $
-      HashMap.lookup name m
+    Aeson.Object m -> do
+      v <- 
+        maybe (Result $ Left $ "Object contains no field '" <> name <> "'") return $
+        HashMap.lookup name m
+      Result $ run cont v
     _ ->
       Result $ Left "Not an object"
 
-element :: Int -> Query Aeson.Value
-element index =
+onElement :: Int -> Query a -> Query a
+onElement index cont =
   Query $ ReaderT $ \case
-    Aeson.Array v ->
-      maybe (Result $ Left $ "Array has no index '" <> (fromString . show) index <> "'") return $
-      v Vector.!? index
+    Aeson.Array v -> do
+      v <-
+        maybe (Result $ Left $ "Array has no index '" <> (fromString . show) index <> "'") return $
+        v Vector.!? index
+      Result $ run cont v
     _ ->
       Result $ Left "Not an array"
+
+onNullable :: Query a -> Query (Maybe a)
+onNullable q =
+  Query $ ReaderT $ \case
+    Aeson.Null ->
+      return Nothing
+    x -> 
+      Result $ fmap Just $ run q x
+
+onArrayOf :: Query a -> Query (Vector.Vector a)
+onArrayOf q =
+  Query ask >>= \case
+    Aeson.Array v ->
+      Query $ lift $ Result $ Vector.mapM (run q) v
+    _ ->
+      Query $ lift $ Result $ Left "Not an array"
+
+onObjectOf :: Query a -> Query (HashMap.HashMap Text a)
+onObjectOf q =
+  Query ask >>= Query . lift . Result . \case
+    Aeson.Object m ->
+      mapM (run q) m
+    _ ->
+      Left "Not an object"
 
 string :: Query Text
 string =
@@ -74,30 +102,6 @@ bool =
       return x
     _ -> 
       Result $ Left "Not a bool"
-
-nullable :: Query a -> Query (Maybe a)
-nullable q =
-  Query $ ReaderT $ \case
-    Aeson.Null ->
-      return Nothing
-    x -> 
-      Result $ fmap Just $ run q x
-
-arrayOf :: Query a -> Query (Vector.Vector a)
-arrayOf q =
-  Query ask >>= \case
-    Aeson.Array v ->
-      Query $ lift $ Result $ Vector.mapM (run q) v
-    _ ->
-      Query $ lift $ Result $ Left "Not an array"
-
-objectOf :: Query a -> Query (HashMap.HashMap Text a)
-objectOf q =
-  Query ask >>= Query . lift . Result . \case
-    Aeson.Object m ->
-      mapM (run q) m
-    _ ->
-      Left "Not an object"
 
 fromJSON :: Aeson.FromJSON a => Query a
 fromJSON =
