@@ -1,16 +1,16 @@
 name:
-  aeson-query
+  aeson-value-parser
 version:
-  0.8.0
+  0.9.0
 synopsis:
   An API for parsing "aeson" JSON tree into Haskell types
 description:
 category:
   Data, JSON, Parsing
 homepage:
-  https://github.com/nikita-volkov/aeson-query 
+  https://github.com/nikita-volkov/aeson-value-parser 
 bug-reports:
-  https://github.com/nikita-volkov/aeson-query/issues 
+  https://github.com/nikita-volkov/aeson-value-parser/issues 
 author:
   Nikita Volkov <nikita.y.volkov@mail.ru>
 maintainer:
@@ -31,7 +31,7 @@ source-repository head
   type:
     git
   location:
-    git://github.com/nikita-volkov/aeson-query.git
+    git://github.com/nikita-volkov/aeson-value-parser.git
 
 
 library
@@ -43,7 +43,7 @@ library
     Haskell2010
   other-modules:
   exposed-modules:
-    Aeson.Query
+    Aeson.ValueParser
   build-depends:
     --
     aeson >= 0.8 && < 0.10,

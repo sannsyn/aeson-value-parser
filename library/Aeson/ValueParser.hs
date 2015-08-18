@@ -1,4 +1,25 @@
-module Aeson.Query where
+module Aeson.ValueParser
+(
+  ValueParser,
+  ArrayParser,
+  ObjectParser,
+  run,
+  -- * Value parsers
+  onArray,
+  onObject,
+  onNullable,
+  string,
+  number,
+  bool,
+  fromJSON,
+  -- * Object parsers
+  onKey,
+  onAllKeys,
+  -- * Array parsers
+  onIndex,
+  onAllIndexes,
+)
+where
 
 import BasePrelude hiding (bool)
 import MTLPrelude
@@ -26,7 +47,6 @@ instance MonadPlus Result where
   mplus = (<|>)
 
 
-
 type ValueParser =
   ReaderT A.Value Result
 
@@ -50,6 +70,14 @@ onArray effect =
       runReaderT effect x
     _ ->
       Result $ Left "Not an array"
+
+onObject :: ObjectParser a -> ValueParser a
+onObject effect =
+  ReaderT $ \case
+    A.Object x ->
+      runReaderT effect x
+    _ ->
+      Result $ Left "Not an object"
 
 onNullable :: ValueParser a -> ValueParser (Maybe a)
 onNullable q =
@@ -83,8 +111,8 @@ bool =
     _ -> 
       Result $ Left "Not a bool"
 
-value :: A.FromJSON a => ValueParser a
-value =
+fromJSON :: A.FromJSON a => ValueParser a
+fromJSON =
   ReaderT $ A.fromJSON >>> \case
     A.Error m -> Result $ Left $ fromString m
     A.Success r -> Result $ Right $ r
