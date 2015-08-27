@@ -8,15 +8,15 @@ description:
 category:
   Data, JSON, Parsing
 homepage:
-  https://github.com/nikita-volkov/aeson-value-parser 
+  https://github.com/sannsyn/aeson-value-parser 
 bug-reports:
-  https://github.com/nikita-volkov/aeson-value-parser/issues 
+  https://github.com/sannsyn/aeson-value-parser/issues 
 author:
   Nikita Volkov <nikita.y.volkov@mail.ru>
 maintainer:
   Nikita Volkov <nikita.y.volkov@mail.ru>
 copyright:
-  (c) 2014, Nikita Volkov
+  (c) 2015, Sannsyn AS
 license:
   MIT
 license-file:
@@ -31,7 +31,7 @@ source-repository head
   type:
     git
   location:
-    git://github.com/nikita-volkov/aeson-value-parser.git
+    git://github.com/sannsyn/aeson-value-parser.git
 
 
 library
