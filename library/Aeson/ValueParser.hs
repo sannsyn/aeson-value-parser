@@ -192,5 +192,5 @@ foldlElements step init (Value impl) =
 foldlElements1 :: (a -> b -> a) -> Value b -> Array a
 foldlElements1 step value =
   foldlElements (\acc input -> fmap (flip step input) acc) Nothing value >>= \case
-    Nothing -> Array $ lift $ D.failure "Empty object"
+    Nothing -> Array $ lift $ D.failure "Empty array"
     Just x -> pure x
