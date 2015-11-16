@@ -5,19 +5,19 @@ module Aeson.ValueParser
   ObjectParser,
   run,
   -- * Value parsers
-  onArray,
-  onObject,
-  onNullable,
+  array,
+  object,
+  nullable,
   string,
   number,
   bool,
   fromJSON,
   -- * Object parsers
-  onKey,
-  onAllKeys,
+  field,
+  allFields,
   -- * Array parsers
-  onIndex,
-  onAllIndexes,
+  element,
+  allElements,
 )
 where
 
@@ -63,24 +63,24 @@ run effect =
 -- * Value parsers
 -------------------------
 
-onArray :: ArrayParser a -> ValueParser a
-onArray effect =
+array :: ArrayParser a -> ValueParser a
+array effect =
   ReaderT $ \case
     A.Array x ->
       runReaderT effect x
     _ ->
       Result $ Left "Not an array"
 
-onObject :: ObjectParser a -> ValueParser a
-onObject effect =
+object :: ObjectParser a -> ValueParser a
+object effect =
   ReaderT $ \case
     A.Object x ->
       runReaderT effect x
     _ ->
       Result $ Left "Not an object"
 
-onNullable :: ValueParser a -> ValueParser (Maybe a)
-onNullable q =
+nullable :: ValueParser a -> ValueParser (Maybe a)
+nullable q =
   ReaderT $ \case
     A.Null ->
       return Nothing
@@ -120,25 +120,25 @@ fromJSON =
 -- * Object parsers
 -------------------------
 
-onKey :: Text -> ValueParser a -> ObjectParser a
-onKey key effect =
+field :: Text -> ValueParser a -> ObjectParser a
+field key effect =
   ReaderT $
     maybe (Result $ Left $ "Object contains no field '" <> key <> "'") (runReaderT effect) .
     B.lookup key
 
-onAllKeys :: ValueParser a -> ObjectParser (B.HashMap Text a)
-onAllKeys effect =
+allFields :: ValueParser a -> ObjectParser (B.HashMap Text a)
+allFields effect =
   ReaderT $ mapM (runReaderT effect)
 
 -- * Array parsers
 -------------------------
 
-onIndex :: Int -> ValueParser a -> ArrayParser a
-onIndex index effect =
+element :: Int -> ValueParser a -> ArrayParser a
+element element effect =
   ReaderT $ 
-    maybe (Result $ Left $ "Array has no index '" <> (fromString . show) index <> "'") (runReaderT effect) .
-    flip (C.!?) index
+    maybe (Result $ Left $ "Array has no element '" <> (fromString . show) element <> "'") (runReaderT effect) .
+    flip (C.!?) element
 
-onAllIndexes :: ValueParser a -> ArrayParser (C.Vector a)
-onAllIndexes effect =
+allElements :: ValueParser a -> ArrayParser (C.Vector a)
+allElements effect =
   ReaderT $ mapM (runReaderT effect)
