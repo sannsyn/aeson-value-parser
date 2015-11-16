@@ -1,23 +1,27 @@
+-- |
+-- A parser DSL for the \"aeson\" model of the JSON tree.
 module Aeson.ValueParser
 (
-  ValueParser,
-  ArrayParser,
-  ObjectParser,
+  Value,
   run,
   -- * Value parsers
-  array,
   object,
+  array,
   nullable,
   string,
   number,
   bool,
   fromJSON,
   -- * Object parsers
+  Object,
   field,
-  allFields,
+  fieldsMap,
+  foldlFields,
   -- * Array parsers
+  Array,
   element,
-  allElements,
+  elementsVector,
+  foldlElements,
 )
 where
 
@@ -28,117 +32,150 @@ import Data.Scientific (Scientific)
 import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as B
 import qualified Data.Vector as C
+import qualified Success.Pure as D
 
 
-newtype Result a =
-  Result { resultEither :: Either Text a }
-  deriving (Functor, Applicative, Monad, MonadError Text)
+-- |
+-- A JSON 'A.Value' parser.
+newtype Value a =
+  Value (ReaderT A.Value (D.Success Text) a)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
 
-instance Alternative Result where
-  empty = 
-    Result $ Left "No result"
-  (<|>) =
-    \case
-      Result (Left _) -> id
-      r -> const r
+{-# INLINE run #-}
+run :: Value a -> A.Value -> Either (Maybe Text) a
+run (Value effect) =
+  D.asEither . runReaderT effect
 
-instance MonadPlus Result where
-  mzero = empty
-  mplus = (<|>)
+-- -- * Value parsers
+-- -------------------------
 
-
-type ValueParser =
-  ReaderT A.Value Result
-
-type ArrayParser =
-  ReaderT A.Array Result
-
-type ObjectParser =
-  ReaderT A.Object Result
-
-run :: ValueParser a -> A.Value -> Either Text a
-run effect =
-  resultEither . runReaderT effect
-
--- * Value parsers
--------------------------
-
-array :: ArrayParser a -> ValueParser a
-array effect =
-  ReaderT $ \case
+{-# INLINE array #-}
+array :: Array a -> Value a
+array (Array effect) =
+  Value $ ReaderT $ \case
     A.Array x ->
       runReaderT effect x
     _ ->
-      Result $ Left "Not an array"
+      D.failure "Not an array"
 
-object :: ObjectParser a -> ValueParser a
-object effect =
-  ReaderT $ \case
+{-# INLINE object #-}
+object :: Object a -> Value a
+object (Object effect) =
+  Value $ ReaderT $ \case
     A.Object x ->
       runReaderT effect x
     _ ->
-      Result $ Left "Not an object"
+      D.failure "Not an object"
 
-nullable :: ValueParser a -> ValueParser (Maybe a)
-nullable q =
-  ReaderT $ \case
+{-# INLINE null #-}
+null :: Value ()
+null =
+  Value $ ReaderT $ \case
     A.Null ->
-      return Nothing
-    x -> 
-      Result $ fmap Just $ run q x
+      pure ()
+    _ ->
+      D.failure "Not null"
 
-string :: ValueParser Text
+{-# INLINE nullable #-}
+nullable :: Value a -> Value (Maybe a)
+nullable (Value impl) =
+  Value $ ReaderT $ \case
+    A.Null ->
+      pure Nothing
+    x ->
+      fmap Just (runReaderT impl x)
+
+{-# INLINE string #-}
+string :: Value Text
 string =
-  ReaderT $ \case
+  Value $ ReaderT $ \case
     A.String t ->
-      return t
+      pure t
     _ ->
-      Result $ Left "Not a string"
+      D.failure "Not a string"
 
-number :: ValueParser Scientific
+{-# INLINE number #-}
+number :: Value Scientific
 number =
-  ReaderT $ \case
+  Value $ ReaderT $ \case
     A.Number x ->
-      return x
+      pure x
     _ ->
-      Result $ Left "Not a number"
+      D.failure "Not a number"
 
-bool :: ValueParser Bool
+{-# INLINE bool #-}
+bool :: Value Bool
 bool =
-  ReaderT $ \case
+  Value $ ReaderT $ \case
     A.Bool x -> 
-      return x
+      pure x
     _ -> 
-      Result $ Left "Not a bool"
+      D.failure "Not a bool"
 
-fromJSON :: A.FromJSON a => ValueParser a
+{-# INLINE fromJSON #-}
+fromJSON :: A.FromJSON a => Value a
 fromJSON =
-  ReaderT $ A.fromJSON >>> \case
-    A.Error m -> Result $ Left $ fromString m
-    A.Success r -> Result $ Right $ r
+  Value $ ReaderT $ A.fromJSON >>> \case
+    A.Error m -> D.failure (fromString m)
+    A.Success r -> pure r
+
 
 -- * Object parsers
 -------------------------
 
-field :: Text -> ValueParser a -> ObjectParser a
-field key effect =
-  ReaderT $
-    maybe (Result $ Left $ "Object contains no field '" <> key <> "'") (runReaderT effect) .
+-- |
+-- A JSON 'A.Object' parser.
+newtype Object a =
+  Object (ReaderT A.Object (D.Success Text) a)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
+
+{-# INLINE field #-}
+field :: Text -> Value a -> Object a
+field key (Value effect) =
+  Object $ ReaderT $
+    maybe (D.failure $ "Object contains no field '" <> key <> "'") (runReaderT effect) .
     B.lookup key
 
-allFields :: ValueParser a -> ObjectParser (B.HashMap Text a)
-allFields effect =
-  ReaderT $ mapM (runReaderT effect)
+{-# INLINE fieldsMap #-}
+fieldsMap :: Value a -> Object (B.HashMap Text a)
+fieldsMap (Value effect) =
+  Object $ ReaderT $ mapM (runReaderT effect)
+
+{-# INLINE foldlFields #-}
+foldlFields :: (a -> (Text, b) -> a) -> a -> Value b -> Object a
+foldlFields step init (Value impl) =
+  Object $ ReaderT $ B.foldlWithKey' step' (pure init)
+  where
+    step' acc' key value =
+      acc' >>= \acc -> fmap (step acc . (,) key) (runReaderT impl value)
+
 
 -- * Array parsers
 -------------------------
 
-element :: Int -> ValueParser a -> ArrayParser a
-element element effect =
-  ReaderT $ 
-    maybe (Result $ Left $ "Array has no element '" <> (fromString . show) element <> "'") (runReaderT effect) .
+-- |
+-- A JSON 'A.Array' parser.
+newtype Array a =
+  Array (ReaderT A.Array (D.Success Text) a)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
+
+{-# INLINE element #-}
+element :: Int -> Value a -> Array a
+element element (Value effect) =
+  Array $ ReaderT $ 
+    maybe (D.failure $ "Array has no element '" <> (fromString . show) element <> "'") (runReaderT effect) .
     flip (C.!?) element
 
-allElements :: ValueParser a -> ArrayParser (C.Vector a)
-allElements effect =
-  ReaderT $ mapM (runReaderT effect)
+{-# INLINE elementsVector #-}
+elementsVector :: Value a -> Array (C.Vector a)
+elementsVector (Value effect) =
+  Array $ ReaderT $ mapM (runReaderT effect)
+
+{-# INLINE foldlElements #-}
+foldlElements :: (a -> b -> a) -> a -> Value b -> Array a
+foldlElements step init (Value impl) =
+  Array $ ReaderT $ foldl' step' (pure init)
+  where
+    step' acc' element =
+      acc' >>= \acc -> fmap (step acc) (runReaderT impl element)
+
