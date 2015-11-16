@@ -17,11 +17,13 @@ module Aeson.ValueParser
   field,
   fieldsMap,
   foldlFields,
+  foldlFields1,
   -- * Array parsers
   Array,
   element,
   elementsVector,
   foldlElements,
+  foldlElements1,
 )
 where
 
@@ -149,6 +151,13 @@ foldlFields step init (Value impl) =
     step' acc' key value =
       acc' >>= \acc -> fmap (step acc . (,) key) (runReaderT impl value)
 
+{-# INLINE foldlFields1 #-}
+foldlFields1 :: (a -> (Text, b) -> a) -> Value b -> Object a
+foldlFields1 step value =
+  foldlFields (\acc input -> fmap (flip step input) acc) Nothing value >>= \case
+    Nothing -> Object $ lift $ D.failure "Empty object"
+    Just x -> pure x
+
 
 -- * Array parsers
 -------------------------
@@ -179,3 +188,9 @@ foldlElements step init (Value impl) =
     step' acc' element =
       acc' >>= \acc -> fmap (step acc) (runReaderT impl element)
 
+{-# INLINE foldlElements1 #-}
+foldlElements1 :: (a -> b -> a) -> Value b -> Array a
+foldlElements1 step value =
+  foldlElements (\acc input -> fmap (flip step input) acc) Nothing value >>= \case
+    Nothing -> Array $ lift $ D.failure "Empty object"
+    Just x -> pure x
