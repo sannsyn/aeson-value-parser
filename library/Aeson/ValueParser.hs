@@ -23,6 +23,7 @@ module Aeson.ValueParser
   elementsVector,
   foldlElements,
   foldlElements1,
+  foldrElements,
 )
 where
 
@@ -175,10 +176,18 @@ elementsVector (Value effect) =
 {-# INLINE foldlElements #-}
 foldlElements :: (a -> b -> a) -> a -> Value b -> Array a
 foldlElements step init (Value impl) =
-  Array $ ReaderT $ foldl' step' (pure init)
+  Array $ ReaderT $ foldlM step' init
   where
-    step' acc' element =
-      acc' >>= \acc -> fmap (step acc) (runReaderT impl element)
+    step' acc element =
+      fmap (step acc) (runReaderT impl element)
+
+{-# INLINE foldrElements #-}
+foldrElements :: (b -> a -> a) -> a -> Value b -> Array a
+foldrElements step init (Value impl) =
+  Array $ ReaderT $ foldrM step' init
+  where
+    step' element acc =
+      fmap (flip step acc) (runReaderT impl element)
 
 {-# INLINE foldlElements1 #-}
 foldlElements1 :: (a -> a -> a) -> Value a -> Array a
