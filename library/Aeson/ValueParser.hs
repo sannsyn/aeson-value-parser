@@ -49,7 +49,7 @@ newtype Value a =
 {-# INLINE run #-}
 run :: Value a -> A.Value -> Either Text a
 run (Value effect) =
-  first (fromMaybe "Unspecified failure" . getFirst) . runExcept . runReaderT effect
+  either (Left . fromMaybe "Unspecified failure" . getFirst) Right . runExcept . runReaderT effect
 
 -- * Value parsers
 -------------------------
