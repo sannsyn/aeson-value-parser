@@ -34,19 +34,18 @@ import Data.Scientific (Scientific)
 import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as B
 import qualified Data.Vector as C
-import qualified Success.Pure as D
 
 
 -- |
 -- A JSON 'A.Value' parser.
 newtype Value a =
-  Value (ReaderT A.Value (D.Success Text) a)
+  Value (ReaderT A.Value (Except (First Text)) a)
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
 
 {-# INLINE run #-}
 run :: Value a -> A.Value -> Either (Maybe Text) a
 run (Value effect) =
-  D.asEither . runReaderT effect
+  first getFirst . runExcept . runReaderT effect
 
 -- * Value parsers
 -------------------------
@@ -58,7 +57,7 @@ array (Array effect) =
     A.Array x ->
       runReaderT effect x
     _ ->
-      D.failure "Not an array"
+      (except . Left . First . Just) "Not an array"
 
 {-# INLINE object #-}
 object :: Object a -> Value a
@@ -67,7 +66,7 @@ object (Object effect) =
     A.Object x ->
       runReaderT effect x
     _ ->
-      D.failure "Not an object"
+      (except . Left . First . Just) "Not an object"
 
 {-# INLINE null #-}
 null :: Value ()
@@ -76,7 +75,7 @@ null =
     A.Null ->
       pure ()
     _ ->
-      D.failure "Not null"
+      (except . Left . First . Just) "Not null"
 
 {-# INLINE nullable #-}
 nullable :: Value a -> Value (Maybe a)
@@ -94,7 +93,7 @@ string =
     A.String t ->
       pure t
     _ ->
-      D.failure "Not a string"
+      (except . Left . First . Just) "Not a string"
 
 {-# INLINE number #-}
 number :: Value Scientific
@@ -103,7 +102,7 @@ number =
     A.Number x ->
       pure x
     _ ->
-      D.failure "Not a number"
+      (except . Left . First . Just) "Not a number"
 
 {-# INLINE bool #-}
 bool :: Value Bool
@@ -112,13 +111,13 @@ bool =
     A.Bool x -> 
       pure x
     _ -> 
-      D.failure "Not a bool"
+      (except . Left . First . Just) "Not a bool"
 
 {-# INLINE fromJSON #-}
 fromJSON :: A.FromJSON a => Value a
 fromJSON =
   Value $ ReaderT $ A.fromJSON >>> \case
-    A.Error m -> D.failure (fromString m)
+    A.Error m -> (except . Left . First . Just) (fromString m)
     A.Success r -> pure r
 
 
@@ -128,14 +127,14 @@ fromJSON =
 -- |
 -- A JSON 'A.Object' parser.
 newtype Object a =
-  Object (ReaderT A.Object (D.Success Text) a)
+  Object (ReaderT A.Object (Except (First Text)) a)
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
 
 {-# INLINE field #-}
 field :: Text -> Value a -> Object a
 field key (Value effect) =
   Object $ ReaderT $
-    maybe (D.failure $ "Object contains no field '" <> key <> "'") (runReaderT effect) .
+    maybe ((except . Left . First . Just) $ "Object contains no field '" <> key <> "'") (runReaderT effect) .
     B.lookup key
 
 {-# INLINE fieldsMap #-}
@@ -158,14 +157,14 @@ foldlFields step init (Value impl) =
 -- |
 -- A JSON 'A.Array' parser.
 newtype Array a =
-  Array (ReaderT A.Array (D.Success Text) a)
+  Array (ReaderT A.Array (Except (First Text)) a)
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
 
 {-# INLINE element #-}
 element :: Int -> Value a -> Array a
 element element (Value effect) =
   Array $ ReaderT $ 
-    maybe (D.failure $ "Array has no element '" <> (fromString . show) element <> "'") (runReaderT effect) .
+    maybe ((except . Left . First . Just) $ "Array has no element '" <> (fromString . show) element <> "'") (runReaderT effect) .
     flip (C.!?) element
 
 {-# INLINE elementsVector #-}
@@ -193,5 +192,5 @@ foldrElements step init (Value impl) =
 foldlElements1 :: (a -> a -> a) -> Value a -> Array a
 foldlElements1 step value =
   foldlElements (\acc input -> maybe (Just input) (Just . flip step input) acc) Nothing value >>= \case
-    Nothing -> Array $ lift $ D.failure "Empty array"
+    Nothing -> Array $ lift $ (except . Left . First . Just) "Empty array"
     Just x -> pure x
