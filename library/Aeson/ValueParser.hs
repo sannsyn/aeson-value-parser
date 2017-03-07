@@ -48,8 +48,8 @@ run :: Value a -> A.Value -> Either (Maybe Text) a
 run (Value effect) =
   D.asEither . runReaderT effect
 
--- -- * Value parsers
--- -------------------------
+-- * Value parsers
+-------------------------
 
 {-# INLINE array #-}
 array :: Array a -> Value a
