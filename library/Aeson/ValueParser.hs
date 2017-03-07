@@ -13,6 +13,7 @@ module Aeson.ValueParser
   number,
   bool,
   fromJSON,
+  pointed,
   -- * Object parsers
   Object,
   field,
@@ -35,6 +36,8 @@ import Data.Scientific (Scientific)
 import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as B
 import qualified Data.Vector as C
+import qualified JSONPointer.Model as D
+import qualified JSONPointer.Aeson.Interpreter as E
 
 
 -- |
@@ -44,12 +47,17 @@ newtype Value a =
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
 
 {-# INLINE run #-}
-run :: Value a -> A.Value -> Either (Maybe Text) a
+run :: Value a -> A.Value -> Either Text a
 run (Value effect) =
-  first getFirst . runExcept . runReaderT effect
+  first (fromMaybe "Unspecified failure" . getFirst) . runExcept . runReaderT effect
 
 -- * Value parsers
 -------------------------
+
+{-# INLINE aesonMatcher #-}
+aesonMatcher :: (A.Value -> Either Text a) -> Value a
+aesonMatcher matcher =
+  Value $ ReaderT $ either (except . Left . First . Just) pure . matcher
 
 {-# INLINE array #-}
 array :: Array a -> Value a
@@ -72,11 +80,11 @@ object (Object effect) =
 {-# INLINE null #-}
 null :: Value ()
 null =
-  Value $ ReaderT $ \case
+  aesonMatcher $ \case
     A.Null ->
       pure ()
     _ ->
-      (except . Left . First . Just) "Not null"
+      Left "Not null"
 
 {-# INLINE nullable #-}
 nullable :: Value a -> Value (Maybe a)
@@ -90,29 +98,29 @@ nullable (Value impl) =
 {-# INLINE string #-}
 string :: Value Text
 string =
-  Value $ ReaderT $ \case
+  aesonMatcher $ \case
     A.String t ->
       pure t
     _ ->
-      (except . Left . First . Just) "Not a string"
+      Left "Not a string"
 
 {-# INLINE number #-}
 number :: Value Scientific
 number =
-  Value $ ReaderT $ \case
+  aesonMatcher $ \case
     A.Number x ->
       pure x
     _ ->
-      (except . Left . First . Just) "Not a number"
+      Left "Not a number"
 
 {-# INLINE bool #-}
 bool :: Value Bool
 bool =
-  Value $ ReaderT $ \case
+  aesonMatcher $ \case
     A.Bool x -> 
       pure x
     _ -> 
-      (except . Left . First . Just) "Not a bool"
+      Left "Not a bool"
 
 {-# INLINE fromJSON #-}
 fromJSON :: A.FromJSON a => Value a
@@ -120,6 +128,17 @@ fromJSON =
   Value $ ReaderT $ A.fromJSON >>> \case
     A.Error m -> (except . Left . First . Just) (fromString m)
     A.Success r -> pure r
+
+{-|
+Lifts JSON Pointer.
+-}
+{-# INLINE pointed #-}
+pointed :: D.JSONPointer -> Value a -> Value a
+pointed pointer parser =
+  aesonMatcher $ \value ->
+  case E.value pointer value of
+    Nothing -> Left (fromString (showString "Pointer \"" $ shows pointer "\" points to nothing"))
+    Just pointedValue -> run parser pointedValue
 
 
 -- * Object parsers

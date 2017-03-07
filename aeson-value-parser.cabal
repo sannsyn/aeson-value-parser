@@ -1,7 +1,7 @@
 name:
   aeson-value-parser
 version:
-  0.11.5
+  0.12
 synopsis:
   An API for parsing "aeson" JSON tree into Haskell types
 description:
@@ -46,7 +46,10 @@ library
     Aeson.ValueParser
   build-depends:
     --
-    aeson >= 0.8 && < 2,
+    aeson == 1.*,
+    json-pointer == 0.1.*,
+    json-pointer-aeson == 0.1.*,
+    -- 
     unordered-containers == 0.2.*,
     vector >= 0.10 && < 0.12,
     scientific == 0.3.*,
