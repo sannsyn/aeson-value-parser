@@ -43,13 +43,13 @@ import qualified JSONPointer.Aeson.Interpreter as E
 -- |
 -- A JSON 'A.Value' parser.
 newtype Value a =
-  Value (ReaderT A.Value (Except (First Text)) a)
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
+  Value (ReaderT A.Value (Except Text) a)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Text)
 
 {-# INLINE run #-}
 run :: Value a -> A.Value -> Either Text a
 run (Value effect) =
-  either (Left . fromMaybe "Unspecified failure" . getFirst) Right . runExcept . runReaderT effect
+  runExcept . runReaderT effect
 
 -- * Value parsers
 -------------------------
@@ -57,7 +57,7 @@ run (Value effect) =
 {-# INLINE aesonMatcher #-}
 aesonMatcher :: (A.Value -> Either Text a) -> Value a
 aesonMatcher matcher =
-  Value $ ReaderT $ either (except . Left . First . Just) pure . matcher
+  Value $ ReaderT $ either (except . Left) pure . matcher
 
 {-# INLINE array #-}
 array :: Array a -> Value a
@@ -66,7 +66,7 @@ array (Array effect) =
     A.Array x ->
       runReaderT effect x
     _ ->
-      (except . Left . First . Just) "Not an array"
+      (except . Left) "Not an array"
 
 {-# INLINE object #-}
 object :: Object a -> Value a
@@ -75,7 +75,7 @@ object (Object effect) =
     A.Object x ->
       runReaderT effect x
     _ ->
-      (except . Left . First . Just) "Not an object"
+      (except . Left) "Not an object"
 
 {-# INLINE null #-}
 null :: Value ()
@@ -126,7 +126,7 @@ bool =
 fromJSON :: A.FromJSON a => Value a
 fromJSON =
   Value $ ReaderT $ A.fromJSON >>> \case
-    A.Error m -> (except . Left . First . Just) (fromString m)
+    A.Error m -> (except . Left) (fromString m)
     A.Success r -> pure r
 
 {-|
@@ -147,14 +147,14 @@ pointed pointer parser =
 -- |
 -- A JSON 'A.Object' parser.
 newtype Object a =
-  Object (ReaderT A.Object (Except (First Text)) a)
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
+  Object (ReaderT A.Object (Except Text) a)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Text)
 
 {-# INLINE field #-}
 field :: Text -> Value a -> Object a
 field key (Value effect) =
   Object $ ReaderT $
-    maybe ((except . Left . First . Just) $ "Object contains no field '" <> key <> "'") (runReaderT effect) .
+    maybe ((except . Left) $ "Object contains no field '" <> key <> "'") (runReaderT effect) .
     B.lookup key
 
 {-# INLINE fieldsMap #-}
@@ -177,14 +177,14 @@ foldlFields step init (Value impl) =
 -- |
 -- A JSON 'A.Array' parser.
 newtype Array a =
-  Array (ReaderT A.Array (Except (First Text)) a)
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus)
+  Array (ReaderT A.Array (Except Text) a)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Text)
 
 {-# INLINE element #-}
 element :: Int -> Value a -> Array a
 element element (Value effect) =
   Array $ ReaderT $ 
-    maybe ((except . Left . First . Just) $ "Array has no element '" <> (fromString . show) element <> "'") (runReaderT effect) .
+    maybe ((except . Left) $ "Array has no element '" <> (fromString . show) element <> "'") (runReaderT effect) .
     flip (C.!?) element
 
 {-# INLINE elementsVector #-}
@@ -212,5 +212,5 @@ foldrElements step init (Value impl) =
 foldlElements1 :: (a -> a -> a) -> Value a -> Array a
 foldlElements1 step value =
   foldlElements (\acc input -> maybe (Just input) (Just . flip step input) acc) Nothing value >>= \case
-    Nothing -> Array $ lift $ (except . Left . First . Just) "Empty array"
+    Nothing -> Array $ lift $ (except . Left) "Empty array"
     Just x -> pure x
