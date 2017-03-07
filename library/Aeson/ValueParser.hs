@@ -7,6 +7,7 @@ module Aeson.ValueParser
   -- * Value parsers
   object,
   array,
+  null,
   nullable,
   string,
   number,
@@ -27,7 +28,7 @@ module Aeson.ValueParser
 )
 where
 
-import BasePrelude hiding (bool)
+import BasePrelude hiding (bool, null)
 import MTLPrelude
 import Data.Text (Text)
 import Data.Scientific (Scientific)
