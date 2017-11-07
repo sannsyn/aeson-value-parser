@@ -18,11 +18,13 @@ module Aeson.ValueParser
   Object,
   field,
   fieldsMap,
+  foldFields,
   foldlFields,
   -- * Array parsers
   Array,
   element,
   elementsVector,
+  foldElements,
   foldlElements,
   foldlElements1,
   foldrElements,
@@ -33,6 +35,7 @@ import BasePrelude hiding (bool, null)
 import MTLPrelude
 import Data.Text (Text)
 import Data.Scientific (Scientific)
+import Control.Foldl (Fold(..))
 import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as B
 import qualified Data.Vector as C
@@ -162,6 +165,11 @@ fieldsMap :: Value a -> Object (B.HashMap Text a)
 fieldsMap (Value effect) =
   Object $ ReaderT $ mapM (runReaderT effect)
 
+{-# INLINE foldFields #-}
+foldFields :: Fold (Text, field) object -> Value field -> Object object
+foldFields (Fold foldStep foldInit foldEnd) value =
+  fmap foldEnd (foldlFields foldStep foldInit value)
+
 {-# INLINE foldlFields #-}
 foldlFields :: (a -> (Text, b) -> a) -> a -> Value b -> Object a
 foldlFields step init (Value impl) =
@@ -191,6 +199,11 @@ element element (Value effect) =
 elementsVector :: Value a -> Array (C.Vector a)
 elementsVector (Value effect) =
   Array $ ReaderT $ mapM (runReaderT effect)
+
+{-# INLINE foldElements #-}
+foldElements :: Fold element array -> Value element -> Array array
+foldElements (Fold foldStep foldInit foldEnd) value =
+  fmap foldEnd (foldlElements foldStep foldInit value)
 
 {-# INLINE foldlElements #-}
 foldlElements :: (a -> b -> a) -> a -> Value b -> Array a
