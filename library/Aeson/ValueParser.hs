@@ -10,7 +10,9 @@ module Aeson.ValueParser
   null,
   nullable,
   string,
+  stringAsBytes,
   number,
+  numberAsInt,
   bool,
   fromJSON,
   pointed,
@@ -35,10 +37,12 @@ import BasePrelude hiding (bool, null)
 import MTLPrelude
 import Data.Text (Text)
 import Data.Scientific (Scientific)
+import Data.ByteString (ByteString)
 import Control.Foldl (Fold(..))
 import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as B
 import qualified Data.Vector as C
+import qualified Data.Text.Encoding as F
 import qualified JSONPointer.Model as D
 import qualified JSONPointer.Aeson.Interpreter as E
 
@@ -107,6 +111,11 @@ string =
     _ ->
       Left "Not a string"
 
+{-# INLINE stringAsBytes #-}
+stringAsBytes :: Value ByteString
+stringAsBytes =
+  F.encodeUtf8 <$> string
+
 {-# INLINE number #-}
 number :: Value Scientific
 number =
@@ -115,6 +124,11 @@ number =
       pure x
     _ ->
       Left "Not a number"
+
+{-# INLINE numberAsInt #-}
+numberAsInt :: Value Int
+numberAsInt =
+  round <$> number
 
 {-# INLINE bool #-}
 bool :: Value Bool
