@@ -33,12 +33,7 @@ module Aeson.ValueParser
 )
 where
 
-import BasePrelude hiding (bool, null)
-import MTLPrelude
-import Data.Text (Text)
-import Data.Scientific (Scientific)
-import Data.ByteString (ByteString)
-import Control.Foldl (Fold(..))
+import Aeson.ValueParser.Prelude hiding (bool, null)
 import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as B
 import qualified Data.Vector as C
