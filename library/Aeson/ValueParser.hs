@@ -40,6 +40,7 @@ import qualified Data.Vector as C
 import qualified Data.Text.Encoding as F
 import qualified JSONPointer.Model as D
 import qualified JSONPointer.Aeson.Interpreter as E
+import qualified Data.Scientific as Scientific
 
 
 -- |
@@ -101,7 +102,13 @@ number = aesonMatcher $ \ case
 
 {-# INLINE numberAsInt #-}
 numberAsInt :: Value Int
-numberAsInt = round <$> number
+numberAsInt = aesonMatcher $ \case
+  A.Number x -> if Scientific.isInteger x
+    then case Scientific.toBoundedInteger x of
+      Just int -> Right int
+      Nothing -> Left ("Number " <> showText x <> " is out of integer range")
+    else Left ("Number " <> showText x <> " is not an integer")
+  _ -> Left "Not a number"
 
 {-# INLINE bool #-}
 bool :: Value Bool
