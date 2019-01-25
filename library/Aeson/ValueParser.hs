@@ -68,19 +68,31 @@ astMatcher matcher = Value $ ReaderT $ except . left Error.message . matcher
 array :: Array a -> Value a
 array (Array parser) = Value $ ReaderT $ \ case
   Aeson.Array x -> runReaderT parser x
-  _ -> throwError "Not an array"
+  Aeson.Object _ -> throwError "Unexpected type: object"
+  Aeson.String _ -> throwError "Unexpected type: string"
+  Aeson.Number _ -> throwError "Unexpected type: number"
+  Aeson.Bool _ -> throwError "Unexpected type: bool"
+  Aeson.Null -> throwError "Unexpected value: null"
 
 {-# INLINE object #-}
 object :: Object a -> Value a
 object (Object effect) = Value $ ReaderT $ \ case
   Aeson.Object x -> runReaderT effect x
-  _ -> throwError "Not an object"
+  Aeson.Array _ -> throwError "Unexpected type: array"
+  Aeson.String _ -> throwError "Unexpected type: string"
+  Aeson.Number _ -> throwError "Unexpected type: number"
+  Aeson.Bool _ -> throwError "Unexpected type: bool"
+  Aeson.Null -> throwError "Unexpected value: null"
 
 {-# INLINE null #-}
 null :: Value ()
 null = astMatcher $ \ case
   Aeson.Null -> pure ()
-  _ -> Left "Not null"
+  Aeson.Object _ -> throwError "Unexpected type: object"
+  Aeson.Array _ -> throwError "Unexpected type: array"
+  Aeson.String _ -> throwError "Unexpected type: string"
+  Aeson.Number _ -> throwError "Unexpected type: number"
+  Aeson.Bool _ -> throwError "Unexpected type: bool"
 
 {-# INLINE nullable #-}
 nullable :: Value a -> Value (Maybe a)
@@ -92,7 +104,11 @@ nullable (Value parser) = Value $ ReaderT $ \ case
 string :: Value Text
 string = astMatcher $ \ case
   Aeson.String t -> pure t
-  _ -> Left "Not a string"
+  Aeson.Object _ -> throwError "Unexpected type: object"
+  Aeson.Array _ -> throwError "Unexpected type: array"
+  Aeson.Number _ -> throwError "Unexpected type: number"
+  Aeson.Bool _ -> throwError "Unexpected type: bool"
+  Aeson.Null -> throwError "Unexpected value: null"
 
 {-# INLINE stringAsBytes #-}
 stringAsBytes :: Value ByteString
@@ -102,23 +118,31 @@ stringAsBytes = Text.encodeUtf8 <$> string
 number :: Value Scientific
 number = astMatcher $ \ case
   Aeson.Number x -> pure x
-  _ -> Left "Not a number"
+  Aeson.Object _ -> throwError "Unexpected type: object"
+  Aeson.Array _ -> throwError "Unexpected type: array"
+  Aeson.String _ -> throwError "Unexpected type: string"
+  Aeson.Bool _ -> throwError "Unexpected type: bool"
+  Aeson.Null -> throwError "Unexpected value: null"
 
 {-# INLINE numberAsInt #-}
 numberAsInt :: Value Int
-numberAsInt = astMatcher $ \case
-  Aeson.Number x -> if Scientific.isInteger x
+numberAsInt = do
+  x <- number
+  if Scientific.isInteger x
     then case Scientific.toBoundedInteger x of
-      Just int -> Right int
-      Nothing -> Left ("Number " <> showText x <> " is out of integer range")
-    else Left ("Number " <> showText x <> " is not an integer")
-  _ -> Left "Not a number"
+      Just int -> return int
+      Nothing -> fail ("Number " <> show x <> " is out of integer range")
+    else fail ("Number " <> show x <> " is not an integer")
 
 {-# INLINE bool #-}
 bool :: Value Bool
 bool = astMatcher $ \ case
   Aeson.Bool x -> pure x
-  _ -> Left "Not a bool"
+  Aeson.Object _ -> throwError "Unexpected type: object"
+  Aeson.Array _ -> throwError "Unexpected type: array"
+  Aeson.String _ -> throwError "Unexpected type: string"
+  Aeson.Number _ -> throwError "Unexpected type: number"
+  Aeson.Null -> throwError "Unexpected value: null"
 
 {-# INLINE fromJSON #-}
 fromJSON :: Aeson.FromJSON a => Value a
