@@ -13,8 +13,9 @@ import Control.Arrow as Exports
 import Control.Category as Exports
 import Control.Concurrent as Exports
 import Control.Exception as Exports
-import Control.Monad as Exports hiding (mapM_, sequence_, forM_, msum, mapM, sequence, forM)
+import Control.Monad as Exports hiding (fail, mapM_, sequence_, forM_, msum, mapM, sequence, forM)
 import Control.Monad.IO.Class as Exports
+import Control.Monad.Fail as Exports
 import Control.Monad.Fix as Exports hiding (fix)
 import Control.Monad.ST as Exports
 import Data.Bits as Exports
@@ -57,7 +58,7 @@ import GHC.Exts as Exports (lazy, inline, sortWith, groupWith, IsList(..))
 import GHC.Generics as Exports (Generic)
 import GHC.IO.Exception as Exports
 import Numeric as Exports
-import Prelude as Exports hiding (concat, foldr, mapM_, sequence_, foldl1, maximum, minimum, product, sum, all, and, any, concatMap, elem, foldl, foldr1, notElem, or, mapM, sequence, id, (.))
+import Prelude as Exports hiding (fail, concat, foldr, mapM_, sequence_, foldl1, maximum, minimum, product, sum, all, and, any, concatMap, elem, foldl, foldr1, notElem, or, mapM, sequence, id, (.))
 import System.Environment as Exports
 import System.Exit as Exports
 import System.IO as Exports
@@ -72,10 +73,6 @@ import Text.Printf as Exports (printf, hPrintf)
 import Text.Read as Exports (Read(..), readMaybe, readEither)
 import Unsafe.Coerce as Exports
 
--- foldl
--------------------------
-import Control.Foldl as Exports (Fold(..), FoldM(..))
-
 -- transformers
 -------------------------
 import Control.Monad.Trans.Class as Exports
@@ -84,7 +81,7 @@ import Control.Monad.Trans.Reader as Exports hiding (liftCatch, liftCallCC)
 
 -- mtl
 -------------------------
-import Control.Monad.Error.Class as Exports
+import Control.Monad.Error.Class as Exports hiding (Error)
 
 -- bytestring
 -------------------------
@@ -97,6 +94,10 @@ import Data.Text as Exports (Text)
 -- unordered-containers
 -------------------------
 import Data.HashMap.Strict as Exports (HashMap)
+
+-- vector
+-------------------------
+import Data.Vector as Exports (Vector)
 
 -- scientific
 -------------------------

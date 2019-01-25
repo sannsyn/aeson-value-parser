@@ -4,6 +4,7 @@ module Aeson.ValueParser
 (
   Value,
   run,
+  Error.Error(..),
   -- * Value parsers
   object,
   array,
@@ -15,96 +16,98 @@ module Aeson.ValueParser
   numberAsInt,
   bool,
   fromJSON,
-  pointed,
   -- * Object parsers
   Object,
   field,
-  eitherField,
-  fieldsMap,
-  foldFields,
+  oneOfFields,
+  fieldMap,
   foldlFields,
   -- * Array parsers
   Array,
   element,
-  elementsVector,
-  foldElements,
+  elementVector,
   foldlElements,
-  foldlElements1,
   foldrElements,
 )
 where
 
 import Aeson.ValueParser.Prelude hiding (bool, null)
-import qualified Data.Aeson as A
-import qualified Data.HashMap.Strict as B
-import qualified Data.Vector as C
-import qualified Data.Text.Encoding as F
-import qualified JSONPointer.Model as D
-import qualified JSONPointer.Aeson.Interpreter as E
+import qualified Aeson.ValueParser.Error as Error
+import qualified Data.Aeson as Aeson
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Scientific as Scientific
+import qualified Data.Text.Encoding as Text
+import qualified Data.Vector as Vector
+import qualified Aeson.ValueParser.Vector as Vector
 
 
--- |
--- A JSON 'A.Value' parser.
-newtype Value a =
-  Value (ReaderT A.Value (Except Text) a)
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Text)
-
-{-# INLINE run #-}
-run :: Value a -> A.Value -> Either Text a
-run (Value effect) = runExcept . runReaderT effect
-
--- * Value parsers
+-- * Value
 -------------------------
 
-{-# INLINE aesonMatcher #-}
-aesonMatcher :: (A.Value -> Either Text a) -> Value a
-aesonMatcher matcher = Value $ ReaderT $ either (except . Left) pure . matcher
+-- |
+-- A JSON 'Aeson.Value' parser.
+newtype Value a =
+  Value (ReaderT Aeson.Value (Except Error.Error) a)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Error.Error)
+
+instance MonadFail Value where
+  fail = throwError . fromString
+
+{-# INLINE run #-}
+run :: Value a -> Aeson.Value -> Either Error.Error a
+run (Value effect) = runExcept . runReaderT effect
+
+-- ** Definitions
+-------------------------
+
+{-# INLINE astMatcher #-}
+astMatcher :: (Aeson.Value -> Either Text a) -> Value a
+astMatcher matcher = Value $ ReaderT $ except . left Error.message . matcher
 
 {-# INLINE array #-}
 array :: Array a -> Value a
-array (Array effect) = Value $ ReaderT $ \ case
-  A.Array x -> runReaderT effect x
-  _ -> (except . Left) "Not an array"
+array (Array parser) = Value $ ReaderT $ \ case
+  Aeson.Array x -> runReaderT parser x
+  _ -> throwError "Not an array"
 
 {-# INLINE object #-}
 object :: Object a -> Value a
 object (Object effect) = Value $ ReaderT $ \ case
-  A.Object x -> runReaderT effect x
-  _ -> (except . Left) "Not an object"
+  Aeson.Object x -> runReaderT effect x
+  _ -> throwError "Not an object"
 
 {-# INLINE null #-}
 null :: Value ()
-null = aesonMatcher $ \ case
-  A.Null -> pure ()
+null = astMatcher $ \ case
+  Aeson.Null -> pure ()
   _ -> Left "Not null"
 
 {-# INLINE nullable #-}
 nullable :: Value a -> Value (Maybe a)
-nullable (Value impl) = Value $ ReaderT $ \ case
-  A.Null -> pure Nothing
-  x -> fmap Just (runReaderT impl x)
+nullable (Value parser) = Value $ ReaderT $ \ case
+  Aeson.Null -> pure Nothing
+  x -> fmap Just (runReaderT parser x)
 
 {-# INLINE string #-}
 string :: Value Text
-string = aesonMatcher $ \ case
-  A.String t -> pure t
+string = astMatcher $ \ case
+  Aeson.String t -> pure t
   _ -> Left "Not a string"
 
 {-# INLINE stringAsBytes #-}
 stringAsBytes :: Value ByteString
-stringAsBytes = F.encodeUtf8 <$> string
+stringAsBytes = Text.encodeUtf8 <$> string
 
 {-# INLINE number #-}
 number :: Value Scientific
-number = aesonMatcher $ \ case
-  A.Number x -> pure x
+number = astMatcher $ \ case
+  Aeson.Number x -> pure x
   _ -> Left "Not a number"
 
 {-# INLINE numberAsInt #-}
 numberAsInt :: Value Int
-numberAsInt = aesonMatcher $ \case
-  A.Number x -> if Scientific.isInteger x
+numberAsInt = astMatcher $ \case
+  Aeson.Number x -> if Scientific.isInteger x
     then case Scientific.toBoundedInteger x of
       Just int -> Right int
       Nothing -> Left ("Number " <> showText x <> " is out of integer range")
@@ -113,96 +116,94 @@ numberAsInt = aesonMatcher $ \case
 
 {-# INLINE bool #-}
 bool :: Value Bool
-bool = aesonMatcher $ \ case
-  A.Bool x -> pure x
+bool = astMatcher $ \ case
+  Aeson.Bool x -> pure x
   _ -> Left "Not a bool"
 
 {-# INLINE fromJSON #-}
-fromJSON :: A.FromJSON a => Value a
-fromJSON = Value $ ReaderT $ A.fromJSON >>> \ case
-  A.Error m -> (except . Left) (fromString m)
-  A.Success r -> pure r
-
-{-|
-Lifts JSON Pointer.
--}
-{-# INLINE pointed #-}
-pointed :: D.JSONPointer -> Value a -> Value a
-pointed pointer parser = aesonMatcher $ \ value -> case E.value pointer value of
-  Nothing -> Left (fromString (showString "Pointer \"" $ shows pointer "\" points to nothing"))
-  Just pointedValue -> run parser pointedValue
+fromJSON :: Aeson.FromJSON a => Value a
+fromJSON = Value $ ReaderT $ Aeson.fromJSON >>> \ case
+  Aeson.Error m -> (except . Left) (fromString m)
+  Aeson.Success r -> pure r
 
 
 -- * Object parsers
 -------------------------
 
 -- |
--- A JSON 'A.Object' parser.
+-- A JSON 'Aeson.Object' parser.
 newtype Object a =
-  Object (ReaderT A.Object (Except Text) a)
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Text)
+  Object (ReaderT (HashMap Text Aeson.Value) (Except Error.Error) a)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Error.Error)
+
+instance MonadFail Object where
+  fail = throwError . fromString
 
 {-# INLINE field #-}
 field :: Text -> Value a -> Object a
-field key (Value effect) = Object $ ReaderT $
-  maybe ((except . Left) $ "Object contains no field '" <> key <> "'") (runReaderT effect) .
-  B.lookup key
+field key (Value effect) = Object $ ReaderT $ \ object -> except $ case HashMap.lookup key object of
+  Just value -> case runExcept (runReaderT effect value) of
+    Left (Error.Error path message) -> Left (Error.Error (key : path) message)
+    Right parsedValue -> Right parsedValue
+  Nothing -> Left (Error.Error (pure key) "Object contains no such key")
 
-{-# INLINE eitherField #-}
-eitherField :: [Text] -> Value value -> Object value
-eitherField list valueParser =
-  asum (fmap (\ key -> field key valueParser) list) 
+{-# INLINE oneOfFields #-}
+oneOfFields :: [Text] -> Value a -> Object a
+oneOfFields keys valueParser = asum (fmap (flip field valueParser) keys)
 
-{-# INLINE fieldsMap #-}
-fieldsMap :: Value a -> Object (B.HashMap Text a)
-fieldsMap (Value effect) = Object $ ReaderT $ mapM (runReaderT effect)
-
-{-# INLINE foldFields #-}
-foldFields :: Fold (Text, field) object -> Value field -> Object object
-foldFields (Fold foldStep foldInit foldEnd) value = fmap foldEnd (foldlFields foldStep foldInit value)
+{-# INLINE fieldMap #-}
+fieldMap :: Value a -> Object (HashMap Text a)
+fieldMap fieldParser = Object $ ReaderT $ except . HashMap.traverseWithKey mapping where
+  mapping key ast = case run fieldParser ast of
+    Right parsedField -> return parsedField
+    Left error -> Left (Error.named key error)
 
 {-# INLINE foldlFields #-}
-foldlFields :: (a -> (Text, b) -> a) -> a -> Value b -> Object a
-foldlFields step init (Value impl) = Object $ ReaderT $ B.foldlWithKey' step' (pure init) where
-  step' acc' key value = acc' >>= \acc -> fmap (step acc . (,) key) (runReaderT impl value)
+foldlFields :: (state -> Text -> field -> state) -> state -> Value field -> Object state
+foldlFields step state fieldParser = Object $ ReaderT $ \ object -> except $ HashMap.foldlWithKey' newStep (pure state) object where
+  newStep stateEither key fieldAst = case run fieldParser fieldAst of
+    Right !parsedField -> do
+      !state <- stateEither
+      return $ step state key parsedField
+    Left error -> Left (Error.named key error)
 
 
 -- * Array parsers
 -------------------------
 
 -- |
--- A JSON 'A.Array' parser.
+-- A JSON 'Aeson.Array' parser.
 newtype Array a =
-  Array (ReaderT A.Array (Except Text) a)
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Text)
+  Array (ReaderT (Vector Aeson.Value) (Except Error.Error) a)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Error.Error)
+
+instance MonadFail Array where
+  fail = throwError . fromString
 
 {-# INLINE element #-}
 element :: Int -> Value a -> Array a
-element element (Value effect) = Array $ ReaderT $
-  maybe ((except . Left) $ "Array has no element '" <> (fromString . show) element <> "'") (runReaderT effect) .
-  flip (C.!?) element
+element index elementParser = Array $ ReaderT $ \ array -> except $ case array Vector.!? index of
+  Just element -> case run elementParser element of
+    Right result -> Right result
+    Left error -> Left (Error.indexed index error)
+  Nothing -> Left (Error.Error (pure (fromString (show index))) "Array contains no element by this index")
 
-{-# INLINE elementsVector #-}
-elementsVector :: Value a -> Array (C.Vector a)
-elementsVector (Value effect) = Array $ ReaderT $ mapM (runReaderT effect)
-
-{-# INLINE foldElements #-}
-foldElements :: Fold element array -> Value element -> Array array
-foldElements (Fold foldStep foldInit foldEnd) value = fmap foldEnd (foldlElements foldStep foldInit value)
+{-# INLINE elementVector #-}
+elementVector :: Value a -> Array (Vector a)
+elementVector elementParser = Array $ ReaderT $ \ arrayAst -> except $ flip Vector.imapM arrayAst $ \ index ast -> case run elementParser ast of
+  Right element -> Right element
+  Left error -> Left (Error.indexed index error)
 
 {-# INLINE foldlElements #-}
-foldlElements :: (a -> b -> a) -> a -> Value b -> Array a
-foldlElements step init (Value impl) = Array $ ReaderT $ foldlM step' init where
-  step' acc element = fmap (step acc) (runReaderT impl element)
+foldlElements :: (state -> Int -> element -> state) -> state -> Value element -> Array state
+foldlElements step state elementParser = Array $ ReaderT $ except . Vector.ifoldM' newStep state where
+  newStep state index ast = case run elementParser ast of
+    Right !element -> Right $ step state index element
+    Left error -> Left (Error.indexed index error)
 
 {-# INLINE foldrElements #-}
-foldrElements :: (b -> a -> a) -> a -> Value b -> Array a
-foldrElements step init (Value impl) = Array $ ReaderT $ foldrM step' init where
-  step' element acc = fmap (flip step acc) (runReaderT impl element)
-
-{-# INLINE foldlElements1 #-}
-foldlElements1 :: (a -> a -> a) -> Value a -> Array a
-foldlElements1 step value =
-  foldlElements (\acc input -> maybe (Just input) (Just . flip step input) acc) Nothing value >>= \ case
-    Nothing -> Array $ lift $ (except . Left) "Empty array"
-    Just x -> pure x
+foldrElements :: (Int -> element -> state -> state) -> state -> Value element -> Array state
+foldrElements step state elementParser = Array $ ReaderT $ except . Vector.ifoldrM newStep state where
+  newStep index ast nextState = case run elementParser ast of
+    Right !element -> Right $ step index element nextState
+    Left error -> Left (Error.indexed index error)
