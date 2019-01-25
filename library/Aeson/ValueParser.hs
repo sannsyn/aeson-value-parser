@@ -19,6 +19,7 @@ module Aeson.ValueParser
   -- * Object parsers
   Object,
   field,
+  eitherField,
   fieldsMap,
   foldFields,
   foldlFields,
@@ -146,6 +147,11 @@ field :: Text -> Value a -> Object a
 field key (Value effect) = Object $ ReaderT $
   maybe ((except . Left) $ "Object contains no field '" <> key <> "'") (runReaderT effect) .
   B.lookup key
+
+{-# INLINE eitherField #-}
+eitherField :: [Text] -> Value value -> Object value
+eitherField list valueParser =
+  asum (fmap (\ key -> field key valueParser) list) 
 
 {-# INLINE fieldsMap #-}
 fieldsMap :: Value a -> Object (B.HashMap Text a)
