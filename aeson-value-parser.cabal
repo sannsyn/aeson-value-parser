@@ -1,5 +1,5 @@
 name: aeson-value-parser
-version: 0.14.1
+version: 0.14.2
 synopsis: An API for parsing "aeson" JSON tree into Haskell types
 description:
 category: Data, JSON, Parsing
