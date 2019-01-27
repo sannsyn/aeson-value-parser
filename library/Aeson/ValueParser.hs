@@ -20,6 +20,8 @@ module Aeson.ValueParser
   Object,
   field,
   oneOfFields,
+  fieldOr,
+  oneOfFieldsOr,
   fieldMap,
   foldlFields,
   -- * Array parsers
@@ -167,13 +169,23 @@ instance MonadFail Object where
 field :: Text -> Value a -> Object a
 field key (Value effect) = Object $ ReaderT $ \ object -> except $ case HashMap.lookup key object of
   Just value -> case runExcept (runReaderT effect value) of
-    Left (Error.Error path message) -> Left (Error.Error (key : path) message)
     Right parsedValue -> Right parsedValue
+    Left error -> Left (Error.named key error)
   Nothing -> Left (Error.Error (pure key) "Object contains no such key")
 
 {-# INLINE oneOfFields #-}
 oneOfFields :: [Text] -> Value a -> Object a
 oneOfFields keys valueParser = asum (fmap (flip field valueParser) keys)
+
+fieldOr :: Text -> Value a -> Object a -> Object a
+fieldOr name parser alt =
+  join $ mplus
+    (field name (catchError (fmap pure parser) (pure . throwError . Error.named name)))
+    (pure alt)
+
+oneOfFieldsOr :: [Text] -> Value a -> Object a -> Object a
+oneOfFieldsOr names valueParser objectParser =
+  foldr (\ name -> fieldOr name valueParser) objectParser names
 
 {-# INLINE fieldMap #-}
 fieldMap :: Value a -> Object (HashMap Text a)
