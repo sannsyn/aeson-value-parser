@@ -7,7 +7,7 @@ import Aeson.ValueParser.Prelude
 data Error = Error [Text] {-^ Path -} Text {-^ Message -}
 
 instance Semigroup Error where
-  (<>) a _ = a
+  (<>) _ b = b
 
 instance Monoid Error where
   mempty = Error [] ""
