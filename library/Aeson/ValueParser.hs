@@ -182,10 +182,11 @@ oneOfFields keys valueParser = asum (fmap (flip field valueParser) keys)
     IOW, it won't execute /Alternative branch/ if /Field parser/ fails.
     This is what distinguishes @fieldOr name parser@ from the seemingly same @mplus (field name parser)@ -}
 fieldOr :: Text {-^ Field name -} -> Value a {-^ Field parser -} -> Object a {-^ Alternative branch -} -> Object a
-fieldOr name parser alt =
-  join $ mplus
-    (field name (catchError (fmap pure parser) (pure . throwError . Error.named name)))
-    (pure alt)
+fieldOr name (Value fieldParser) alt = join $ Object $ ReaderT $ \ object -> except $ case HashMap.lookup name object of
+  Just value -> case runExcept (runReaderT fieldParser value) of
+    Right parsedValue -> Right (return parsedValue)
+    Left error -> Left (Error.named name error)
+  Nothing -> Right alt
 
 {-| Same as `fieldOr`,
     with the only difference that it enumerates the provided list of field names
