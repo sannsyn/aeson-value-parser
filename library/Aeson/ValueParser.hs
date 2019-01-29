@@ -22,6 +22,8 @@ module Aeson.ValueParser
   oneOfFields,
   fieldOr,
   oneOfFieldsOr,
+  possibleField,
+  oneOfPossibleFields,
   fieldMap,
   foldlFields,
   -- * Array parsers
@@ -194,6 +196,24 @@ fieldOr name (Value fieldParser) alt = join $ Object $ ReaderT $ \ object -> exc
 oneOfFieldsOr :: [Text] -> Value a -> Object a -> Object a
 oneOfFieldsOr names valueParser objectParser =
   foldr (\ name -> fieldOr name valueParser) objectParser names
+
+{-| Applies the value parser to the existing field, propagating its errors accordingly, but
+    unlike `field` it doesn't fail if the field does not exist.
+    The `Maybe` wrapper is there to cover such a case. -}
+{-# INLINE possibleField #-}
+possibleField :: Text -> Value a -> Object (Maybe a)
+possibleField key (Value effect) = Object $ ReaderT $ \ object -> except $ case HashMap.lookup key object of
+  Just value -> case runExcept (runReaderT effect value) of
+    Right parsedValue -> Right (Just parsedValue)
+    Left error -> Left (Error.named key error)
+  Nothing -> Right Nothing
+
+{-| Same as `possibleField`,
+    with the only difference that it enumerates the provided list of field names
+    parsing the first existing one. -}
+{-# INLINE oneOfPossibleFields #-}
+oneOfPossibleFields :: [Text] -> Value a -> Object (Maybe a)
+oneOfPossibleFields keys valueParser = oneOfFieldsOr keys (fmap Just valueParser) (pure Nothing)
 
 {-# INLINE fieldMap #-}
 fieldMap :: Value a -> Object (HashMap Text a)
