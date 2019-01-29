@@ -181,34 +181,33 @@ field key (Value effect) = Object $ ReaderT $ \ object -> except $ case HashMap.
 oneOfFields :: [Text] -> Value a -> Object a
 oneOfFields keys valueParser = asum (fmap (flip field valueParser) keys)
 
+{-# INLINE possibleFieldInChurch #-}
+possibleFieldInChurch :: b -> (a -> b) -> Text -> Value a -> Object b
+possibleFieldInChurch nothing just key fieldParser = Object $ ReaderT $ \ object -> except $ case HashMap.lookup key object of
+  Just value -> case run fieldParser value of
+    Right parsedValue -> Right (just parsedValue)
+    Left error -> Left (Error.named key error)
+  Nothing -> Right nothing
+
 {-| Applies the value parser to the existing field, propagating its errors accordingly.
     Only if the field does not exist, it executes /Alternative branch/.
     IOW, it won't execute /Alternative branch/ if /Field parser/ fails.
     This is what distinguishes @fieldOr name parser@ from the seemingly same @mplus (field name parser)@ -}
 fieldOr :: Text {-^ Field name -} -> Value a {-^ Field parser -} -> Object a {-^ Alternative branch -} -> Object a
-fieldOr name fieldParser alt = join $ Object $ ReaderT $ \ object -> except $ case HashMap.lookup name object of
-  Just value -> case run fieldParser value of
-    Right parsedValue -> Right (return parsedValue)
-    Left error -> Left (Error.named name error)
-  Nothing -> Right alt
+fieldOr name fieldParser alt = join $ possibleFieldInChurch alt return name fieldParser
 
 {-| Same as `fieldOr`,
     with the only difference that it enumerates the provided list of field names
     parsing the first existing one. -}
 oneOfFieldsOr :: [Text] -> Value a -> Object a -> Object a
-oneOfFieldsOr names valueParser objectParser =
-  foldr (\ name -> fieldOr name valueParser) objectParser names
+oneOfFieldsOr names valueParser objectParser = foldr (\ name -> fieldOr name valueParser) objectParser names
 
 {-| Applies the value parser to the existing field, propagating its errors accordingly, but
     unlike `field` it doesn't fail if the field does not exist.
     The `Maybe` wrapper is there to cover such a case. -}
 {-# INLINE possibleField #-}
 possibleField :: Text -> Value a -> Object (Maybe a)
-possibleField key fieldParser = Object $ ReaderT $ \ object -> except $ case HashMap.lookup key object of
-  Just value -> case run fieldParser value of
-    Right parsedValue -> Right (Just parsedValue)
-    Left error -> Left (Error.named key error)
-  Nothing -> Right Nothing
+possibleField = possibleFieldInChurch Nothing Just
 
 {-| Same as `possibleField`,
     with the only difference that it enumerates the provided list of field names
