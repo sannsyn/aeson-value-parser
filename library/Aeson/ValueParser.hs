@@ -24,8 +24,7 @@ module Aeson.ValueParser
   oneOfFieldsOr,
   possibleField,
   oneOfPossibleFields,
-  oneOfExistingFields,
-  oneOfExistingFields1,
+  matchField,
   fieldMap,
   foldlFields,
   -- * Array parsers
@@ -222,18 +221,13 @@ oneOfPossibleFields keys valueParser = oneOfFieldsOr keys (fmap Just valueParser
 {-| Branch out the parsing scenario based on which fields are defined.
     The value parser returns a continuation of the object parser,
     thus allowing you to continue parsing the object
-    in the context of a parsed field. -}
-{-# INLINE oneOfExistingFields #-}
-oneOfExistingFields :: [(Text, Value (Object a))] -> Object a
-oneOfExistingFields = foldr tryCaseOr empty where
+    in the context of a parsed field.
+    
+    Fails if the list of provided cases is empty. -}
+{-# INLINE matchField #-}
+matchField :: [(Text, Value (Object a))] -> Object a
+matchField = \ cases -> foldr tryCaseOr (noneFound (HashSet.fromList (fmap fst cases))) cases where
   tryCaseOr (name, fieldParser) alt = join $ possibleFieldInChurch alt id name fieldParser
-
-{-| Same as `oneOfExistingFields`, but fails if none of the fields are found,
-    listing all the fields searched for.
-    Also fails if the list of provided cases is empty. -}
-{-# INLINE oneOfExistingFields1 #-}
-oneOfExistingFields1 :: [(Text, Value (Object a))] -> Object a
-oneOfExistingFields1 = \ cases -> oneOfExistingFields cases <|> noneFound (HashSet.fromList (fmap fst cases)) where
   noneFound nameSet = fail ("None of the following fields were found: " <> show (toList nameSet))
 
 {-# INLINE fieldMap #-}
