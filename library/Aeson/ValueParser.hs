@@ -177,12 +177,19 @@ field key (Value effect) = Object $ ReaderT $ \ object -> except $ case HashMap.
 oneOfFields :: [Text] -> Value a -> Object a
 oneOfFields keys valueParser = asum (fmap (flip field valueParser) keys)
 
-fieldOr :: Text -> Value a -> Object a -> Object a
+{-| Applies the value parser to the existing field, propagating its errors accordingly.
+    Only if the field does not exist, it executes /Alternative branch/.
+    IOW, it won't execute /Alternative branch/ if /Field parser/ fails.
+    This is what distinguishes @fieldOr name parser@ from the seemingly same @mplus (field name parser)@ -}
+fieldOr :: Text {-^ Field name -} -> Value a {-^ Field parser -} -> Object a {-^ Alternative branch -} -> Object a
 fieldOr name parser alt =
   join $ mplus
     (field name (catchError (fmap pure parser) (pure . throwError . Error.named name)))
     (pure alt)
 
+{-| Same as `fieldOr`,
+    with the only difference that it enumerates the provided list of field names
+    parsing the first existing one. -}
 oneOfFieldsOr :: [Text] -> Value a -> Object a -> Object a
 oneOfFieldsOr names valueParser objectParser =
   foldr (\ name -> fieldOr name valueParser) objectParser names
