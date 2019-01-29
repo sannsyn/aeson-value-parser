@@ -29,6 +29,8 @@ module Aeson.ValueParser
   -- * Array parsers
   Array,
   element,
+  elementOr,
+  possibleElement,
   elementVector,
   foldlElements,
   foldrElements,
@@ -251,6 +253,22 @@ element index elementParser = Array $ ReaderT $ \ array -> except $ case array V
     Right result -> Right result
     Left error -> Left (Error.indexed index error)
   Nothing -> Left (Error.Error (pure (fromString (show index))) "Array contains no element by this index")
+
+{-# INLINE elementOr #-}
+elementOr :: Int -> Value a -> Array a -> Array a
+elementOr index elementParser alt = join $ Array $ ReaderT $ \ array -> except $ case array Vector.!? index of
+  Just element -> case run elementParser element of
+    Right result -> Right (return result)
+    Left error -> Left (Error.indexed index error)
+  Nothing -> Right alt
+
+{-# INLINE possibleElement #-}
+possibleElement :: Int -> Value a -> Array (Maybe a)
+possibleElement index elementParser = Array $ ReaderT $ \ array -> except $ case array Vector.!? index of
+  Just element -> case run elementParser element of
+    Right result -> Right (Just result)
+    Left error -> Left (Error.indexed index error)
+  Nothing -> Right Nothing
 
 {-# INLINE elementVector #-}
 elementVector :: Value a -> Array (Vector a)
