@@ -78,6 +78,7 @@ import Unsafe.Coerce as Exports
 -------------------------
 import Control.Monad.Trans.Class as Exports
 import Control.Monad.Trans.Except as Exports hiding (liftCatch, liftCallCC)
+import Control.Monad.Trans.Maybe as Exports hiding (liftCatch, liftCallCC, liftListen, liftPass)
 import Control.Monad.Trans.Reader as Exports hiding (liftCatch, liftCallCC)
 
 -- mtl

@@ -29,6 +29,7 @@ library
     Aeson.ValueParser.Vector
   build-depends:
     aeson ==1.*,
+    attoparsec >=0.13 && <0.14,
     base >=4.9 && <5,
     bytestring >=0.10 && <0.12,
     mtl >=2.2 && <3,

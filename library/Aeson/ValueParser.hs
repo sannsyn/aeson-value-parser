@@ -1,5 +1,8 @@
--- |
--- A parser DSL for the \"aeson\" model of the JSON tree.
+{-
+Parser DSL for the \"aeson\" model of JSON tree.
+
+The general model of this DSL is about switching between contexts
+-}
 module Aeson.ValueParser
 (
   Value,
@@ -11,11 +14,20 @@ module Aeson.ValueParser
   null,
   nullable,
   string,
-  stringAsBytes,
   number,
-  numberAsInt,
   bool,
   fromJSON,
+  -- * String parsers
+  String,
+  text,
+  matchedText,
+  parsedText,
+  -- * Number parsers
+  Number,
+  scientific,
+  integer,
+  floating,
+  matchedScientific,
   -- * Object parsers
   Object,
   field,
@@ -31,9 +43,10 @@ module Aeson.ValueParser
 )
 where
 
-import Aeson.ValueParser.Prelude hiding (bool, null)
+import Aeson.ValueParser.Prelude hiding (bool, null, String)
 import qualified Aeson.ValueParser.Error as Error
 import qualified Data.Aeson as Aeson
+import qualified Data.Attoparsec.Text as Attoparsec
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import qualified Data.Scientific as Scientific
@@ -42,64 +55,61 @@ import qualified Data.Vector as Vector
 import qualified Aeson.ValueParser.Vector as Vector
 
 
--- * Shared
--------------------------
-
-type Parse ast = ReaderT ast (ExceptT Error.Error (Except Error.Error))
-
-
 -- * Value
 -------------------------
 
--- |
--- A JSON 'Aeson.Value' parser.
-newtype Value a =
-  Value (Parse Aeson.Value a)
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Error.Error)
+{-|
+JSON `Aeson.Value` AST parser.
 
-instance MonadFail Value where
-  fail = throwError . fromString
+Its `Alternative` instance implements the logic of choosing between the possible types of JSON values.
+-}
+newtype Value a =
+  Value (ReaderT Aeson.Value (MaybeT (Either Error.Error)) a)
+  deriving (Functor, Applicative)
+
+{-|
+Implements the logic of choosing between the possible types of JSON values.
+
+If you have multiple parsers of the same type of JSON value composed,
+only the leftmost will be affective.
+The errors from deeper parsers do not trigger the alternation,
+instead they get propagated to the top.
+-}
+instance Alternative Value where
+  empty = Value $ ReaderT $ const $ MaybeT $ return Nothing
+  (<|>) (Value leftParser) (Value rightParser) = Value (leftParser <|> rightParser)
 
 {-# INLINE run #-}
 run :: Value a -> Aeson.Value -> Either Error.Error a
-run (Value effect) = join . runExcept . runExceptT . runReaderT effect
+run = \ (Value parser) value -> (=<<) (maybe (Left (typeError value)) Right) $ runMaybeT $ runReaderT parser value where
+  typeError = \ case
+    Aeson.Array _ -> "Unexpected type: array"
+    Aeson.Object _ -> "Unexpected type: object"
+    Aeson.String _ -> "Unexpected type: string"
+    Aeson.Number _ -> "Unexpected type: number"
+    Aeson.Bool _ -> "Unexpected type: bool"
+    Aeson.Null -> "Unexpected type: null"
 
 -- ** Definitions
 -------------------------
 
-{-# INLINE astMatcher #-}
-astMatcher :: (Aeson.Value -> Either Text a) -> Value a
-astMatcher matcher = Value $ ReaderT $ either (throwE . Error.message) return . matcher
-
 {-# INLINE array #-}
 array :: Array a -> Value a
 array (Array parser) = Value $ ReaderT $ \ case
-  Aeson.Array x -> runReaderT parser x
-  Aeson.Object _ -> throwError "Unexpected type: object"
-  Aeson.String _ -> throwError "Unexpected type: string"
-  Aeson.Number _ -> throwError "Unexpected type: number"
-  Aeson.Bool _ -> throwError "Unexpected type: bool"
-  Aeson.Null -> throwError "Unexpected value: null"
+  Aeson.Array x -> lift $ join $ runExcept $ runExceptT $ runReaderT parser x
+  _ -> empty
 
 {-# INLINE object #-}
 object :: Object a -> Value a
-object (Object effect) = Value $ ReaderT $ \ case
-  Aeson.Object x -> runReaderT effect x
-  Aeson.Array _ -> throwError "Unexpected type: array"
-  Aeson.String _ -> throwError "Unexpected type: string"
-  Aeson.Number _ -> throwError "Unexpected type: number"
-  Aeson.Bool _ -> throwError "Unexpected type: bool"
-  Aeson.Null -> throwError "Unexpected value: null"
+object (Object parser) = Value $ ReaderT $ \ case
+  Aeson.Object x -> lift $ join $ runExcept $ runExceptT $ runReaderT parser x
+  _ -> empty
 
 {-# INLINE null #-}
 null :: Value ()
-null = astMatcher $ \ case
+null = Value $ ReaderT $ \ case
   Aeson.Null -> pure ()
-  Aeson.Object _ -> throwError "Unexpected type: object"
-  Aeson.Array _ -> throwError "Unexpected type: array"
-  Aeson.String _ -> throwError "Unexpected type: string"
-  Aeson.Number _ -> throwError "Unexpected type: number"
-  Aeson.Bool _ -> throwError "Unexpected type: bool"
+  _ -> empty
 
 {-# INLINE nullable #-}
 nullable :: Value a -> Value (Maybe a)
@@ -108,63 +118,96 @@ nullable (Value parser) = Value $ ReaderT $ \ case
   x -> fmap Just (runReaderT parser x)
 
 {-# INLINE string #-}
-string :: Value Text
-string = astMatcher $ \ case
-  Aeson.String t -> pure t
-  Aeson.Object _ -> throwError "Unexpected type: object"
-  Aeson.Array _ -> throwError "Unexpected type: array"
-  Aeson.Number _ -> throwError "Unexpected type: number"
-  Aeson.Bool _ -> throwError "Unexpected type: bool"
-  Aeson.Null -> throwError "Unexpected value: null"
+string :: String a -> Value a
+string (String parser) = Value $ ReaderT $ \ case
+  Aeson.String x -> lift $ left (Error.message . fromMaybe "No details") $ runExcept $ runReaderT parser x
+  _ -> empty
 
-{-# INLINE stringAsBytes #-}
-stringAsBytes :: Value ByteString
-stringAsBytes = Text.encodeUtf8 <$> string
+{-# INLINE matchedString #-}
+matchedString :: (Text -> Either Text a) -> Value a
+matchedString parser = Value $ ReaderT $ \ case
+  Aeson.String x -> lift $ left Error.message $ parser x
+  _ -> empty
 
 {-# INLINE number #-}
-number :: Value Scientific
-number = astMatcher $ \ case
-  Aeson.Number x -> pure x
-  Aeson.Object _ -> throwError "Unexpected type: object"
-  Aeson.Array _ -> throwError "Unexpected type: array"
-  Aeson.String _ -> throwError "Unexpected type: string"
-  Aeson.Bool _ -> throwError "Unexpected type: bool"
-  Aeson.Null -> throwError "Unexpected value: null"
-
-{-# INLINE numberAsInt #-}
-numberAsInt :: Value Int
-numberAsInt = do
-  x <- number
-  if Scientific.isInteger x
-    then case Scientific.toBoundedInteger x of
-      Just int -> return int
-      Nothing -> fail ("Number " <> show x <> " is out of integer range")
-    else fail ("Number " <> show x <> " is not an integer")
+number :: Number a -> Value a
+number (Number parser) = Value $ ReaderT $ \ case
+  Aeson.Number x -> lift $ left (Error.message . fromMaybe "No details") $ runExcept $ runReaderT parser x
+  _ -> empty
 
 {-# INLINE bool #-}
 bool :: Value Bool
-bool = astMatcher $ \ case
-  Aeson.Bool x -> pure x
-  Aeson.Object _ -> throwError "Unexpected type: object"
-  Aeson.Array _ -> throwError "Unexpected type: array"
-  Aeson.String _ -> throwError "Unexpected type: string"
-  Aeson.Number _ -> throwError "Unexpected type: number"
-  Aeson.Null -> throwError "Unexpected value: null"
+bool = Value $ ReaderT $ \ case
+  Aeson.Bool x -> return x
+  _ -> empty
 
 {-# INLINE fromJSON #-}
 fromJSON :: Aeson.FromJSON a => Value a
 fromJSON = Value $ ReaderT $ Aeson.fromJSON >>> \ case
   Aeson.Success r -> return r
-  Aeson.Error m -> lift $ throwE $ fromString m
+  Aeson.Error m -> lift $ Left $ fromString m
+
+
+-- * String parsers
+-------------------------
+
+newtype String a =
+  String (ReaderT Text (Except (Maybe Text)) a)
+  deriving (Functor, Applicative, Alternative)
+
+{-# INLINE text #-}
+text :: String Text
+text = String ask
+
+{-# INLINE matchedText #-}
+matchedText :: (Text -> Either Text a) -> String a
+matchedText parser = String $ ReaderT $ except . left Just . parser
+
+{-# INLINE parsedText #-}
+parsedText :: Attoparsec.Parser a -> String a
+parsedText parser = matchedText $ left fromString . Attoparsec.parseOnly parser
+
+
+-- * Number parsers
+-------------------------
+
+newtype Number a =
+  Number (ReaderT Scientific (Except (Maybe Text)) a)
+  deriving (Functor, Applicative, Alternative)
+
+{-# INLINE scientific #-}
+scientific :: Number Scientific
+scientific = Number ask
+
+{-# INLINE integer #-}
+integer :: (Integral a, Bounded a) => Number a
+integer = Number $ ReaderT $ \ x -> if Scientific.isInteger x
+  then case Scientific.toBoundedInteger x of
+    Just int -> return int
+    Nothing -> throwError (Just (fromString ("Number " <> show x <> " is out of integer range")))
+  else throwError (Just (fromString ("Number " <> show x <> " is not integer")))
+
+{-# INLINE floating #-}
+floating :: RealFloat a => Number a
+floating = Number $ ReaderT $ \ a -> case Scientific.toBoundedRealFloat a of
+  Right b -> return b
+  Left c -> if c == 0
+    then throwError (Just (fromString ("Number " <> show a <> " is too small")))
+    else throwError (Just (fromString ("Number " <> show a <> " is too large")))
+
+{-# INLINE matchedScientific #-}
+matchedScientific :: (Scientific -> Either Text a) -> Number a
+matchedScientific parser = Number $ ReaderT $ except . left Just . parser
 
 
 -- * Object parsers
 -------------------------
 
--- |
--- A JSON 'Aeson.Object' parser.
+{-|
+JSON `Aeson.Object` parser.
+-}
 newtype Object a =
-  Object (Parse (HashMap Text Aeson.Value) a)
+  Object (ReaderT (HashMap Text Aeson.Value) (ExceptT Error.Error (Except Error.Error)) a)
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Error.Error)
 
 instance MonadFail Object where
@@ -202,10 +245,11 @@ foldlFields step state fieldParser = Object $ ReaderT $ \ object -> HashMap.fold
 -- * Array parsers
 -------------------------
 
--- |
--- A JSON 'Aeson.Array' parser.
+{-|
+JSON `Aeson.Array` parser.
+-}
 newtype Array a =
-  Array (Parse (Vector Aeson.Value) a)
+  Array (ReaderT (Vector Aeson.Value) (ExceptT Error.Error (Except Error.Error)) a)
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Error.Error)
 
 instance MonadFail Array where
