@@ -1,7 +1,12 @@
 name: aeson-value-parser
 version: 0.15
-synopsis: An API for parsing "aeson" JSON tree into Haskell types
+synopsis: API for parsing "aeson" JSON tree into Haskell types
 description:
+  A flexible parser DSL of JSON AST produced by the \"aeson\" library
+  with automated and highly detailed error reporting.
+  Provides a featureful toolkit for parsing real-world documents with schemas
+  of any complexity or ambiguity, which the "FromJSON" instances
+  are simply not fit for.
 category: Data, JSON, Parsing
 homepage: https://github.com/sannsyn/aeson-value-parser
 bug-reports: https://github.com/sannsyn/aeson-value-parser/issues
