@@ -28,6 +28,8 @@ module Aeson.ValueParser
   integer,
   floating,
   matchedScientific,
+  matchedInteger,
+  matchedFloating,
   -- * Object parsers
   Object,
   field,
@@ -197,7 +199,17 @@ floating = Number $ ReaderT $ \ a -> case Scientific.toBoundedRealFloat a of
 
 {-# INLINE matchedScientific #-}
 matchedScientific :: (Scientific -> Either Text a) -> Number a
-matchedScientific parser = Number $ ReaderT $ except . left Just . parser
+matchedScientific matcher = Number $ ReaderT $ except . left Just . matcher
+
+{-# INLINE matchedInteger #-}
+matchedInteger :: (Integral integer, Bounded integer) => (integer -> Either Text a) -> Number a
+matchedInteger matcher = Number $ case integer of
+  Number parser -> parser >>= either (throwError . Just) return . matcher
+
+{-# INLINE matchedFloating #-}
+matchedFloating :: RealFloat floating => (floating -> Either Text a) -> Number a
+matchedFloating matcher = Number $ case floating of
+  Number parser -> parser >>= either (throwError . Just) return . matcher
 
 
 -- * Object parsers
