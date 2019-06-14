@@ -1,7 +1,7 @@
 {-
 Parser DSL for the \"aeson\" model of JSON tree.
 
-The general model of this DSL is about switching between contexts
+The general model of this DSL is about switching between contexts.
 -}
 module Aeson.ValueParser
 (
