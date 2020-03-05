@@ -105,6 +105,10 @@ import Data.Vector as Exports (Vector)
 -------------------------
 import Data.Scientific as Exports (Scientific)
 
+-- hashable
+-------------------------
+import Data.Hashable as Exports (Hashable)
+
 
 showText :: Show a => a -> Text
 showText = fromString . show

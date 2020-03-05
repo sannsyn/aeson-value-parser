@@ -92,6 +92,9 @@ run = \ (Value parser) value -> (=<<) (maybe (Left (typeError value)) Right) $ r
     Aeson.Bool _ -> "Unexpected type: bool"
     Aeson.Null -> "Unexpected type: null"
 
+runString :: String a -> Text -> Either (Maybe Text) a
+runString (String a) b = runExcept (runReaderT a b)
+
 -- ** Definitions
 -------------------------
 
@@ -238,11 +241,14 @@ oneOfFields :: [Text] -> Value a -> Object a
 oneOfFields keys valueParser = asum (fmap (flip field valueParser) keys)
 
 {-# INLINE fieldMap #-}
-fieldMap :: Value a -> Object (HashMap Text a)
-fieldMap fieldParser = Object $ ReaderT $ HashMap.traverseWithKey mapping where
-  mapping key ast = case run fieldParser ast of
-    Right parsedField -> return parsedField
-    Left error -> lift (throwE (Error.named key error))
+fieldMap :: (Eq a, Hashable a) => String a -> Value b -> Object (HashMap a b)
+fieldMap keyParser fieldParser = Object $ ReaderT $ fmap HashMap.fromList . traverse mapping . HashMap.toList where
+  mapping (keyText, ast) = 
+    case runString keyParser keyText of
+      Right parsedKey -> case run fieldParser ast of
+        Right parsedField -> return (parsedKey, parsedField)
+        Left error -> lift (throwE (Error.named keyText error))
+      Left error -> lift (throwE (maybe mempty Error.message error))
 
 {-# INLINE foldlFields #-}
 foldlFields :: (state -> Text -> field -> state) -> state -> Value field -> Object state
