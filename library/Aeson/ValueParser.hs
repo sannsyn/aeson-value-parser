@@ -13,6 +13,7 @@ module Aeson.ValueParser
   array,
   null,
   nullable,
+  nullableMonoid,
   string,
   number,
   bool,
@@ -121,6 +122,12 @@ nullable :: Value a -> Value (Maybe a)
 nullable (Value parser) = Value $ ReaderT $ \ case
   Aeson.Null -> pure Nothing
   x -> fmap Just (runReaderT parser x)
+
+{-# INLINE nullableMonoid #-}
+nullableMonoid :: Monoid a => Value a -> Value a
+nullableMonoid (Value parser) = Value $ ReaderT $ \ case
+  Aeson.Null -> pure mempty
+  x -> runReaderT parser x
 
 {-# INLINE string #-}
 string :: String a -> Value a
