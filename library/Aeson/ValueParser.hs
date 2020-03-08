@@ -135,12 +135,6 @@ string (String parser) = Value $ ReaderT $ \ case
   Aeson.String x -> lift $ left (Error.message . fromMaybe "No details") $ runExcept $ runReaderT parser x
   _ -> empty
 
-{-# INLINE matchedString #-}
-matchedString :: (Text -> Either Text a) -> Value a
-matchedString parser = Value $ ReaderT $ \ case
-  Aeson.String x -> lift $ left Error.message $ parser x
-  _ -> empty
-
 {-# INLINE number #-}
 number :: Number a -> Value a
 number (Number parser) = Value $ ReaderT $ \ case
