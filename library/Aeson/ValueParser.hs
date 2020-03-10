@@ -252,13 +252,16 @@ fieldMap keyParser fieldParser = Object $ ReaderT $ fmap HashMap.fromList . trav
       Left error -> lift (throwE (maybe mempty Error.message error))
 
 {-# INLINE foldlFields #-}
-foldlFields :: (state -> Text -> field -> state) -> state -> Value field -> Object state
-foldlFields step state fieldParser = Object $ ReaderT $ \ object -> HashMap.foldlWithKey' newStep (pure state) object where
-  newStep stateE key fieldAst = case run fieldParser fieldAst of
-    Right !parsedField -> do
-      !state <- stateE
-      return $ step state key parsedField
-    Left error -> lift (throwE (Error.named key error))
+foldlFields :: (state -> key -> field -> state) -> state -> String key -> Value field -> Object state
+foldlFields step state keyParser fieldParser = Object $ ReaderT $ \ object -> HashMap.foldlWithKey' newStep (pure state) object where
+  newStep stateE key fieldAst = 
+    case runString keyParser key of
+      Right !parsedKey -> case run fieldParser fieldAst of
+        Right !parsedField -> do
+          !state <- stateE
+          return $ step state parsedKey parsedField
+        Left error -> lift (throwE (Error.named key error))
+      Left error -> lift (throwE (maybe mempty Error.message error))
 
 
 -- * Array parsers
