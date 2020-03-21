@@ -7,6 +7,7 @@ module Aeson.ValueParser
 (
   Value,
   run,
+  runWithTextError,
   Error.Error(..),
   -- * Value parsers
   object,
@@ -92,6 +93,10 @@ run = \ (Value parser) value -> (=<<) (maybe (Left (typeError value)) Right) $ r
     Aeson.Number _ -> "Unexpected type: number"
     Aeson.Bool _ -> "Unexpected type: bool"
     Aeson.Null -> "Unexpected type: null"
+
+{-# INLINE runWithTextError #-}
+runWithTextError :: Value a -> Aeson.Value -> Either Text a
+runWithTextError parser = left Error.toText . run parser
 
 runString :: String a -> Text -> Either (Maybe Text) a
 runString (String a) b = runExcept (runReaderT a b)
