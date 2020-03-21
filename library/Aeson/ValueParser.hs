@@ -23,7 +23,8 @@ module Aeson.ValueParser
   String,
   text,
   matchedText,
-  parsedText,
+  attoparsedText,
+  megaparsedText,
   -- * Number parsers
   Number,
   scientific,
@@ -51,6 +52,7 @@ import Aeson.ValueParser.Prelude hiding (bool, null, String)
 import qualified Aeson.ValueParser.Error as Error
 import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.Text as Attoparsec
+import qualified Text.Megaparsec as Megaparsec
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import qualified Data.Scientific as Scientific
@@ -174,9 +176,15 @@ text = String ask
 matchedText :: (Text -> Either Text a) -> String a
 matchedText parser = String $ ReaderT $ except . left Just . parser
 
-{-# INLINE parsedText #-}
-parsedText :: Attoparsec.Parser a -> String a
-parsedText parser = matchedText $ left fromString . Attoparsec.parseOnly parser
+{-# INLINE attoparsedText #-}
+attoparsedText :: Attoparsec.Parser a -> String a
+attoparsedText parser = matchedText $ left fromString . Attoparsec.parseOnly parser
+
+{-# INLINE megaparsedText #-}
+megaparsedText :: Megaparsec.Parsec Void Text a -> String a
+megaparsedText = matchedText . matcher where
+  matcher :: Megaparsec.Parsec Void Text a -> Text -> Either Text a
+  matcher p = left (fromString . Megaparsec.errorBundlePretty) . Megaparsec.runParser (p <* Megaparsec.eof) ""
 
 
 -- * Number parsers
