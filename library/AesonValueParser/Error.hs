@@ -1,7 +1,7 @@
-module Aeson.ValueParser.Error
+module AesonValueParser.Error
 where
 
-import Aeson.ValueParser.Prelude
+import AesonValueParser.Prelude
 import qualified Data.Text as Text
 import qualified Text.Builder as TextBuilder
 

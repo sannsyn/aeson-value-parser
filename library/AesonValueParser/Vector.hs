@@ -1,7 +1,7 @@
-module Aeson.ValueParser.Vector
+module AesonValueParser.Vector
 where
 
-import Aeson.ValueParser.Prelude hiding (Vector)
+import AesonValueParser.Prelude hiding (Vector)
 import Data.Vector.Generic
 import qualified Data.Vector.Fusion.Bundle.Monadic as BundleM
 

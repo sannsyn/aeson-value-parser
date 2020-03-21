@@ -1,4 +1,4 @@
-module Aeson.ValueParser.Prelude
+module AesonValueParser.Prelude
 (
   module Exports,
   showText,

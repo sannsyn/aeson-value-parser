@@ -3,7 +3,7 @@ Parser DSL for the \"aeson\" model of JSON tree.
 
 The general model of this DSL is about switching between contexts.
 -}
-module Aeson.ValueParser
+module AesonValueParser
 (
   Value,
   run,
@@ -48,8 +48,8 @@ module Aeson.ValueParser
 )
 where
 
-import Aeson.ValueParser.Prelude hiding (bool, null, String)
-import qualified Aeson.ValueParser.Error as Error
+import AesonValueParser.Prelude hiding (bool, null, String)
+import qualified AesonValueParser.Error as Error
 import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.Text as Attoparsec
 import qualified Text.Megaparsec as Megaparsec
@@ -58,7 +58,7 @@ import qualified Data.HashSet as HashSet
 import qualified Data.Scientific as Scientific
 import qualified Data.Text.Encoding as Text
 import qualified Data.Vector as Vector
-import qualified Aeson.ValueParser.Vector as Vector
+import qualified AesonValueParser.Vector as Vector
 
 
 -- * Value
