@@ -22,6 +22,7 @@ module AesonValueParser
   -- * String parsers
   String,
   text,
+  mappedText,
   narrowedText,
   matchedText,
   attoparsedText,
@@ -172,6 +173,12 @@ newtype String a =
 {-# INLINE text #-}
 text :: String Text
 text = String ask
+
+{-# INLINE mappedText #-}
+mappedText :: [(Text, a)] -> String a
+mappedText mappingList = let
+  !hashMap = HashMap.fromList mappingList
+  in narrowedText (flip HashMap.lookup hashMap)
 
 {-# INLINE narrowedText #-}
 narrowedText :: (Text -> Maybe a) -> String a
