@@ -178,7 +178,11 @@ text = String ask
 mappedText :: [(Text, a)] -> String a
 mappedText mappingList = let
   !hashMap = HashMap.fromList mappingList
-  in narrowedText (flip HashMap.lookup hashMap)
+  expectedValuesText = fromString (show (fmap fst mappingList))
+  match text = case HashMap.lookup text hashMap of
+    Just a -> Right a
+    _ -> Left ("Unexpected value: \"" <> text <> "\". Expecting one of: " <> expectedValuesText)
+  in matchedText match
 
 {-# INLINE narrowedText #-}
 narrowedText :: (Text -> Maybe a) -> String a
