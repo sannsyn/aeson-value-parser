@@ -22,6 +22,7 @@ module AesonValueParser
   -- * String parsers
   String,
   text,
+  narrowedText,
   matchedText,
   attoparsedText,
   megaparsedText,
@@ -171,6 +172,13 @@ newtype String a =
 {-# INLINE text #-}
 text :: String Text
 text = String ask
+
+{-# INLINE narrowedText #-}
+narrowedText :: (Text -> Maybe a) -> String a
+narrowedText narrow = matchedText match where
+  match text = case narrow text of
+    Just a -> Right a
+    _ -> Left ("Unexpected value: \"" <> text <> "\"")
 
 {-# INLINE matchedText #-}
 matchedText :: (Text -> Either Text a) -> String a
