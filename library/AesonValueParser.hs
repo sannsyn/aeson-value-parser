@@ -271,7 +271,11 @@ field name fieldParser = Object $ ReaderT $ \ object -> case HashMap.lookup name
   Just value -> case run fieldParser value of
     Right parsedValue -> return parsedValue
     Left error -> lift $ throwE $ Error.named name error
-  Nothing -> throwE (Error.Error (pure name) "Object contains no field with this name")
+  Nothing -> throwE (Error.Error (pure name) message)
+    where
+      message =
+        "Object contains no field with this name. Fields available: " <>
+        fromString (show (HashMap.keys object))
 
 {-# INLINE oneOfFields #-}
 oneOfFields :: [Text] -> Value a -> Object a
