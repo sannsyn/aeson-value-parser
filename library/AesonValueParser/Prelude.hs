@@ -9,7 +9,7 @@ where
 -- base
 -------------------------
 import Control.Applicative as Exports
-import Control.Arrow as Exports
+import Control.Arrow as Exports hiding (first, second)
 import Control.Category as Exports
 import Control.Concurrent as Exports
 import Control.Exception as Exports
@@ -18,6 +18,7 @@ import Control.Monad.IO.Class as Exports
 import Control.Monad.Fail as Exports
 import Control.Monad.Fix as Exports hiding (fix)
 import Control.Monad.ST as Exports
+import Data.Bifunctor as Exports
 import Data.Bits as Exports
 import Data.Bool as Exports
 import Data.Char as Exports
@@ -37,11 +38,11 @@ import Data.Ix as Exports
 import Data.List as Exports hiding (sortOn, isSubsequenceOf, uncons, concat, foldr, foldl1, maximum, minimum, product, sum, all, and, any, concatMap, elem, foldl, foldr1, notElem, or, find, maximumBy, minimumBy, mapAccumL, mapAccumR, foldl')
 import Data.List.NonEmpty as Exports (NonEmpty(..))
 import Data.Maybe as Exports
-import Data.Monoid as Exports hiding (Last(..), First(..), (<>))
+import Data.Monoid as Exports hiding ((<>))
 import Data.Ord as Exports
 import Data.Proxy as Exports
 import Data.Ratio as Exports
-import Data.Semigroup as Exports
+import Data.Semigroup as Exports hiding (Last(..), First(..))
 import Data.STRef as Exports
 import Data.String as Exports
 import Data.Traversable as Exports

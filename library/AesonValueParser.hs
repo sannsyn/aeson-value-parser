@@ -103,7 +103,7 @@ runWithTextError :: Value a -> Aeson.Value -> Either Text a
 runWithTextError parser = left Error.toText . run parser
 
 runString :: String a -> Text -> Either (Maybe Text) a
-runString (String a) b = runExcept (runReaderT a b)
+runString (String a) b = first getLast (runExcept (runReaderT a b))
 
 -- ** Definitions
 -------------------------
@@ -141,13 +141,13 @@ nullableMonoid (Value parser) = Value $ ReaderT $ \ case
 {-# INLINE string #-}
 string :: String a -> Value a
 string (String parser) = Value $ ReaderT $ \ case
-  Aeson.String x -> lift $ left (Error.message . fromMaybe "No details") $ runExcept $ runReaderT parser x
+  Aeson.String x -> lift $ left (Error.message . fromMaybe "No details" . getLast) $ runExcept $ runReaderT parser x
   _ -> empty
 
 {-# INLINE number #-}
 number :: Number a -> Value a
 number (Number parser) = Value $ ReaderT $ \ case
-  Aeson.Number x -> lift $ left (Error.message . fromMaybe "No details") $ runExcept $ runReaderT parser x
+  Aeson.Number x -> lift $ left (Error.message . fromMaybe "No details" . getLast) $ runExcept $ runReaderT parser x
   _ -> empty
 
 {-# INLINE bool #-}
@@ -167,7 +167,7 @@ fromJSON = Value $ ReaderT $ Aeson.fromJSON >>> \ case
 -------------------------
 
 newtype String a =
-  String (ReaderT Text (Except (Maybe Text)) a)
+  String (ReaderT Text (Except (Last Text)) a)
   deriving (Functor, Applicative, Alternative)
 
 {-# INLINE text #-}
@@ -197,7 +197,7 @@ narrowedText narrow = matchedText match where
 
 {-# INLINE matchedText #-}
 matchedText :: (Text -> Either Text a) -> String a
-matchedText parser = String $ ReaderT $ except . left Just . parser
+matchedText parser = String $ ReaderT $ except . left (Last . Just) . parser
 
 {-# INLINE attoparsedText #-}
 attoparsedText :: Attoparsec.Parser a -> String a
@@ -214,7 +214,7 @@ megaparsedText = matchedText . matcher where
 -------------------------
 
 newtype Number a =
-  Number (ReaderT Scientific (Except (Maybe Text)) a)
+  Number (ReaderT Scientific (Except (Last Text)) a)
   deriving (Functor, Applicative, Alternative)
 
 {-# INLINE scientific #-}
@@ -226,30 +226,30 @@ integer :: (Integral a, Bounded a) => Number a
 integer = Number $ ReaderT $ \ x -> if Scientific.isInteger x
   then case Scientific.toBoundedInteger x of
     Just int -> return int
-    Nothing -> throwError (Just (fromString ("Number " <> show x <> " is out of integer range")))
-  else throwError (Just (fromString ("Number " <> show x <> " is not integer")))
+    Nothing -> throwError (Last (Just (fromString ("Number " <> show x <> " is out of integer range"))))
+  else throwError (Last (Just (fromString ("Number " <> show x <> " is not integer"))))
 
 {-# INLINE floating #-}
 floating :: RealFloat a => Number a
 floating = Number $ ReaderT $ \ a -> case Scientific.toBoundedRealFloat a of
   Right b -> return b
   Left c -> if c == 0
-    then throwError (Just (fromString ("Number " <> show a <> " is too small")))
-    else throwError (Just (fromString ("Number " <> show a <> " is too large")))
+    then throwError (Last (Just (fromString ("Number " <> show a <> " is too small"))))
+    else throwError (Last (Just (fromString ("Number " <> show a <> " is too large"))))
 
 {-# INLINE matchedScientific #-}
 matchedScientific :: (Scientific -> Either Text a) -> Number a
-matchedScientific matcher = Number $ ReaderT $ except . left Just . matcher
+matchedScientific matcher = Number $ ReaderT $ except . left (Last . Just) . matcher
 
 {-# INLINE matchedInteger #-}
 matchedInteger :: (Integral integer, Bounded integer) => (integer -> Either Text a) -> Number a
 matchedInteger matcher = Number $ case integer of
-  Number parser -> parser >>= either (throwError . Just) return . matcher
+  Number parser -> parser >>= either (throwError . Last . Just) return . matcher
 
 {-# INLINE matchedFloating #-}
 matchedFloating :: RealFloat floating => (floating -> Either Text a) -> Number a
 matchedFloating matcher = Number $ case floating of
-  Number parser -> parser >>= either (throwError . Just) return . matcher
+  Number parser -> parser >>= either (throwError . Last . Just) return . matcher
 
 
 -- * Object parsers
