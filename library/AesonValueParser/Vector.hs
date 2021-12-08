@@ -1,10 +1,8 @@
-module AesonValueParser.Vector
-where
+module AesonValueParser.Vector where
 
 import AesonValueParser.Prelude hiding (Vector)
-import Data.Vector.Generic
 import qualified Data.Vector.Fusion.Bundle.Monadic as BundleM
-
+import Data.Vector.Generic
 
 {-# INLINE ifoldrM #-}
 ifoldrM :: (Vector v a, Monad m) => (Int -> a -> b -> m b) -> b -> v a -> m b

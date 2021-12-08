@@ -1,12 +1,15 @@
-module AesonValueParser.Error
-where
+module AesonValueParser.Error where
 
 import AesonValueParser.Prelude
 import qualified Data.Text as Text
 import qualified Text.Builder as TextBuilder
 
-
-data Error = Error [Text] {-^ Path -} Text {-^ Message -}
+data Error
+  = Error
+      [Text]
+      -- ^ Path
+      Text
+      -- ^ Message
 
 instance Semigroup Error where
   (<>) _ b = b
@@ -38,6 +41,7 @@ toText = TextBuilder.run . toTextBuilder
 
 toTextBuilder :: Error -> TextBuilder.Builder
 toTextBuilder (Error path message) =
-  "AST parsing error at path " <>
-  foldMap (\ x -> "/" <> TextBuilder.text x) path <> ": " <>
-  TextBuilder.text message
+  "AST parsing error at path "
+    <> foldMap (\x -> "/" <> TextBuilder.text x) path
+    <> ": "
+    <> TextBuilder.text message
