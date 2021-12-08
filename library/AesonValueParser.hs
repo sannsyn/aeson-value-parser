@@ -68,8 +68,6 @@ import qualified Text.Megaparsec as Megaparsec
 
 -- * Value
 
--------------------------
-
 -- |
 -- JSON `Aeson.Value` AST parser.
 --
@@ -109,8 +107,6 @@ runString :: String a -> Text -> Either (Maybe Text) a
 runString (String a) b = first getLast (runExcept (runReaderT a b))
 
 -- ** Definitions
-
--------------------------
 
 {-# INLINE array #-}
 array :: Array a -> Value a
@@ -179,8 +175,6 @@ fromJSON =
 
 -- * String parsers
 
--------------------------
-
 newtype String a
   = String (ReaderT Text (Except (Last Text)) a)
   deriving (Functor, Applicative, Alternative)
@@ -228,8 +222,6 @@ megaparsedText = matchedText . matcher
 
 -- * Number parsers
 
--------------------------
-
 newtype Number a
   = Number (ReaderT Scientific (Except (Last Text)) a)
   deriving (Functor, Applicative, Alternative)
@@ -273,8 +265,6 @@ matchedFloating matcher = Number $ case floating of
   Number parser -> parser >>= either (throwError . Last . Just) return . matcher
 
 -- * Object parsers
-
--------------------------
 
 -- |
 -- JSON `Aeson.Object` parser.
@@ -327,8 +317,6 @@ foldlFields step state keyParser fieldParser = Object $ ReaderT $ \object -> Has
         Left error -> lift (throwE (maybe mempty Error.message error))
 
 -- * Array parsers
-
--------------------------
 
 -- |
 -- JSON `Aeson.Array` parser.
