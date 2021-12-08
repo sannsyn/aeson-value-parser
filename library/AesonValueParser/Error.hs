@@ -2,7 +2,6 @@ module AesonValueParser.Error where
 
 import AesonValueParser.Prelude
 import qualified Data.Text as Text
-import qualified Text.Builder as TextBuilder
 
 data Error
   = Error
@@ -37,11 +36,8 @@ message :: Text -> Error
 message = Error []
 
 toText :: Error -> Text
-toText = TextBuilder.run . toTextBuilder
-
-toTextBuilder :: Error -> TextBuilder.Builder
-toTextBuilder (Error path message) =
+toText (Error path message) =
   "AST parsing error at path "
-    <> foldMap (\x -> "/" <> TextBuilder.text x) path
+    <> foldMap (\x -> "/" <> x) path
     <> ": "
-    <> TextBuilder.text message
+    <> message
