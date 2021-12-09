@@ -8,6 +8,7 @@ module AesonValueParser
     run,
     runWithTextError,
     Error.Error (..),
+    parseByteString,
 
     -- * Value parsers
     object,
@@ -107,6 +108,12 @@ runWithTextError parser = left Error.toText . run parser
 
 runString :: String a -> Text -> Either (Maybe Text) a
 runString (String a) b = first getLast (runExcept (runReaderT a b))
+
+parseByteString :: Value a -> ByteString -> Either Text a
+parseByteString p bs =
+  case Aeson.eitherDecodeStrict' bs of
+    Right aeson -> runWithTextError p aeson
+    Left stringErr -> Left (fromString stringErr)
 
 -- ** Definitions
 
