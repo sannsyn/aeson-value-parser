@@ -45,6 +45,7 @@ module AesonValueParser
     oneOfFields,
     fieldMap,
     foldlFields,
+    fieldsAmount,
 
     -- * Array parsers
     Array,
@@ -52,6 +53,7 @@ module AesonValueParser
     elementVector,
     foldlElements,
     foldrElements,
+    elementsAmount,
   )
 where
 
@@ -327,6 +329,9 @@ foldlFields step state keyParser fieldParser = Object $
             Left error -> lift $ throwE $ Error.named key error
           Left error -> lift (throwE (maybe mempty Error.message error))
 
+fieldsAmount :: Object Int
+fieldsAmount = Object $ ReaderT $ pure . KeyMap.size
+
 -- * Array parsers
 
 -- |
@@ -369,3 +374,6 @@ foldrElements step state elementParser = Array $ ReaderT $ Vector.ifoldrM newSte
     newStep index ast nextState = case run elementParser ast of
       Right element -> return $ step index element nextState
       Left error -> lift $ throwE $ Error.indexed index error
+
+elementsAmount :: Array Int
+elementsAmount = Array $ ReaderT $ pure . Vector.length
