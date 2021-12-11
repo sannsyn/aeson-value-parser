@@ -33,7 +33,7 @@ library
     AesonValueParser.Prelude
     AesonValueParser.Vector
   build-depends:
-    aeson >=2.0.2 && <3,
+    aeson ==1.*,
     attoparsec >=0.14 && <0.15,
     base >=4.12 && <5,
     bytestring >=0.10 && <0.12,

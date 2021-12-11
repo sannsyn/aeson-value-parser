@@ -59,8 +59,6 @@ import qualified AesonValueParser.Error as Error
 import AesonValueParser.Prelude hiding (String, bool, null)
 import qualified AesonValueParser.Vector as Vector
 import qualified Data.Aeson as Aeson
-import qualified Data.Aeson.Key as Key
-import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Attoparsec.Text as Attoparsec
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
@@ -278,7 +276,7 @@ matchedFloating matcher = Number $ case floating of
 -- |
 -- JSON `Aeson.Object` parser.
 newtype Object a
-  = Object (ReaderT (KeyMap.KeyMap Aeson.Value) (ExceptT Error.Error (Except Error.Error)) a)
+  = Object (ReaderT (HashMap Text Aeson.Value) (ExceptT Error.Error (Except Error.Error)) a)
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadError Error.Error)
 
 instance MonadFail Object where
@@ -287,7 +285,7 @@ instance MonadFail Object where
 {-# INLINE field #-}
 field :: Text -> Value a -> Object a
 field name fieldParser = Object $
-  ReaderT $ \object -> case KeyMap.lookup (Key.fromText name) object of
+  ReaderT $ \object -> case HashMap.lookup name object of
     Just value -> case run fieldParser value of
       Right parsedValue -> return parsedValue
       Left error -> lift $ throwE $ Error.named name error
@@ -295,7 +293,7 @@ field name fieldParser = Object $
       where
         message =
           "Object contains no field with this name. Fields available: "
-            <> fromString (show (KeyMap.keys object))
+            <> fromString (show (HashMap.keys object))
 
 {-# INLINE oneOfFields #-}
 oneOfFields :: [Text] -> Value a -> Object a
@@ -303,29 +301,27 @@ oneOfFields keys valueParser = asum (fmap (flip field valueParser) keys)
 
 {-# INLINE fieldMap #-}
 fieldMap :: (Eq a, Hashable a) => String a -> Value b -> Object (HashMap a b)
-fieldMap keyParser fieldParser = Object $ ReaderT $ fmap HashMap.fromList . traverse mapping . KeyMap.toList
+fieldMap keyParser fieldParser = Object $ ReaderT $ fmap HashMap.fromList . traverse mapping . HashMap.toList
   where
-    mapping (key, ast) =
-      case Key.toText key of
-        keyText -> case runString keyParser keyText of
-          Right parsedKey -> case run fieldParser ast of
-            Right parsedField -> return (parsedKey, parsedField)
-            Left error -> lift (throwE (Error.named keyText error))
-          Left error -> lift (throwE (maybe mempty Error.message error))
+    mapping (keyText, ast) =
+      case runString keyParser keyText of
+        Right parsedKey -> case run fieldParser ast of
+          Right parsedField -> return (parsedKey, parsedField)
+          Left error -> lift (throwE (Error.named keyText error))
+        Left error -> lift (throwE (maybe mempty Error.message error))
 
 {-# INLINE foldlFields #-}
 foldlFields :: (state -> key -> field -> state) -> state -> String key -> Value field -> Object state
-foldlFields step state keyParser fieldParser = Object $
-  ReaderT $ \object ->
-    KeyMap.foldrWithKey newStep pure object state
+foldlFields step state keyParser fieldParser = Object $ ReaderT $ \object -> HashMap.foldlWithKey' newStep (pure state) object
   where
-    newStep key value next !state =
-      case Key.toText key of
-        key -> case runString keyParser key of
-          Right parsedKey -> case run fieldParser value of
-            Right parsedValue -> next (step state parsedKey parsedValue)
-            Left error -> lift $ throwE $ Error.named key error
-          Left error -> lift (throwE (maybe mempty Error.message error))
+    newStep stateE key fieldAst =
+      case runString keyParser key of
+        Right !parsedKey -> case run fieldParser fieldAst of
+          Right !parsedField -> do
+            !state <- stateE
+            return $ step state parsedKey parsedField
+          Left error -> lift (throwE (Error.named key error))
+        Left error -> lift (throwE (maybe mempty Error.message error))
 
 -- * Array parsers
 
