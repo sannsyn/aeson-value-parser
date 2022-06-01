@@ -7,6 +7,7 @@ module AesonValueParser
   ( Value,
     run,
     runWithTextError,
+    runAsValueParser,
     Error.Error (..),
     parseByteString,
 
@@ -51,6 +52,7 @@ module AesonValueParser
     Array,
     element,
     elementVector,
+    elementList,
     foldlElements,
     foldrElements,
     elementsAmount,
@@ -63,10 +65,12 @@ import qualified AesonValueParser.Vector as Vector
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
+import qualified Data.Aeson.Types as Aeson
 import qualified Data.Attoparsec.Text as Attoparsec
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import qualified Data.Scientific as Scientific
+import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Vector as Vector
 import qualified Text.Megaparsec as Megaparsec
@@ -107,6 +111,29 @@ run = \(Value parser) value -> (=<<) (maybe (Left (typeError value)) Right) $ ru
 {-# INLINE runWithTextError #-}
 runWithTextError :: Value a -> Aeson.Value -> Either Text a
 runWithTextError parser = left Error.toText . run parser
+
+-- | Convert into a function directly applicable as definition
+-- of 'Aeson.parseJSON'.
+-- 
+-- Here's an example of how it can be used:
+-- 
+-- @
+-- data Artist = Artist
+--   { artistName :: Text,
+--     artistGenres :: [Text]
+--   }
+-- 
+-- instance 'Aeson.FromJSON' Artist where
+--   'Aeson.parseJSON' = 'runAsValueParser' $
+--     'object' $ do
+--       name <- 'field' "name" $ 'string' 'text'
+--       genres <- 'field' "genres" $ 'array' $ 'elementList' $ 'string' 'text'
+--       return $ Artist name genres
+-- @
+runAsValueParser :: Value a -> Aeson.Value -> Aeson.Parser a
+runAsValueParser parser =
+  either (fail . Text.unpack) return
+    . runWithTextError parser
 
 runString :: String a -> Text -> Either (Maybe Text) a
 runString (String a) b = first getLast (runExcept (runReaderT a b))
@@ -358,6 +385,10 @@ elementVector elementParser = Array $
   ReaderT $ \arrayAst -> flip Vector.imapM arrayAst $ \index ast -> case run elementParser ast of
     Right element -> return element
     Left error -> lift $ throwE $ Error.indexed index error
+
+{-# INLINE elementList #-}
+elementList :: Value a -> Array [a]
+elementList = fmap Vector.toList . elementVector
 
 {-# INLINE foldlElements #-}
 foldlElements :: (state -> Int -> element -> state) -> state -> Value element -> Array state
