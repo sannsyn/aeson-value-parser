@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name:          aeson-value-parser
-version:       0.19.7
+version:       0.19.7.1
 synopsis:      API for parsing "aeson" JSON tree into Haskell types
 description:
   A flexible parser DSL of JSON AST produced by the \"aeson\" library
