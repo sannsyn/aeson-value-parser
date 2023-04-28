@@ -68,10 +68,8 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.Attoparsec.Text as Attoparsec
 import qualified Data.HashMap.Strict as HashMap
-import qualified Data.HashSet as HashSet
 import qualified Data.Scientific as Scientific
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
 import qualified Data.Vector as Vector
 import qualified Text.Megaparsec as Megaparsec
 
@@ -331,7 +329,7 @@ oneOfFields :: [Text] -> Value a -> Object a
 oneOfFields keys valueParser = asum (fmap (flip field valueParser) keys)
 
 {-# INLINE fieldMap #-}
-fieldMap :: (Eq a, Hashable a) => String a -> Value b -> Object (HashMap a b)
+fieldMap :: (Hashable a) => String a -> Value b -> Object (HashMap a b)
 fieldMap keyParser fieldParser = Object $ ReaderT $ fmap HashMap.fromList . traverse mapping . KeyMap.toList
   where
     mapping (key, ast) =

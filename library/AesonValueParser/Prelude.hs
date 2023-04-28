@@ -16,7 +16,7 @@ import Control.Monad.Fix as Exports hiding (fix)
 import Control.Monad.IO.Class as Exports
 import Control.Monad.ST as Exports
 import Control.Monad.Trans.Class as Exports
-import Control.Monad.Trans.Except as Exports hiding (liftCallCC, liftCatch)
+import Control.Monad.Trans.Except as Exports hiding (liftCallCC)
 import Control.Monad.Trans.Maybe as Exports hiding (liftCallCC, liftCatch, liftListen, liftPass)
 import Control.Monad.Trans.Reader as Exports hiding (liftCallCC, liftCatch)
 import Data.Bifunctor as Exports
@@ -76,8 +76,6 @@ import System.IO.Unsafe as Exports
 import System.Mem as Exports
 import System.Mem.StableName as Exports
 import System.Timeout as Exports
-import Text.ParserCombinators.ReadP as Exports (ReadP, ReadS, readP_to_S, readS_to_P)
-import Text.ParserCombinators.ReadPrec as Exports (ReadPrec, readP_to_Prec, readPrec_to_P, readPrec_to_S, readS_to_Prec)
 import Text.Printf as Exports (hPrintf, printf)
 import Text.Read as Exports (Read (..), readEither, readMaybe)
 import Unsafe.Coerce as Exports
