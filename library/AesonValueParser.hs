@@ -114,15 +114,15 @@ runWithTextError parser = left Error.toText . run parser
 
 -- | Convert into a function directly applicable as definition
 -- of 'Aeson.parseJSON'.
--- 
+--
 -- Here's an example of how it can be used:
--- 
+--
 -- @
 -- data Artist = Artist
 --   { artistName :: Text,
 --     artistGenres :: [Text]
 --   }
--- 
+--
 -- instance 'Aeson.FromJSON' Artist where
 --   'Aeson.parseJSON' = 'runAsValueParser' $
 --     'object' $ do
@@ -175,7 +175,7 @@ nullable (Value parser) = Value $
     x -> fmap Just (runReaderT parser x)
 
 {-# INLINE nullableMonoid #-}
-nullableMonoid :: Monoid a => Value a -> Value a
+nullableMonoid :: (Monoid a) => Value a -> Value a
 nullableMonoid (Value parser) = Value $
   ReaderT $ \case
     Aeson.Null -> pure mempty
@@ -203,7 +203,7 @@ bool = Value $
     _ -> empty
 
 {-# INLINE fromJSON #-}
-fromJSON :: Aeson.FromJSON a => Value a
+fromJSON :: (Aeson.FromJSON a) => Value a
 fromJSON =
   Value $
     ReaderT $
@@ -279,7 +279,7 @@ integer = Number $
       else throwError (Last (Just (fromString ("Number " <> show x <> " is not integer"))))
 
 {-# INLINE floating #-}
-floating :: RealFloat a => Number a
+floating :: (RealFloat a) => Number a
 floating = Number $
   ReaderT $ \a -> case Scientific.toBoundedRealFloat a of
     Right b -> return b
@@ -298,7 +298,7 @@ matchedInteger matcher = Number $ case integer of
   Number parser -> parser >>= either (throwError . Last . Just) return . matcher
 
 {-# INLINE matchedFloating #-}
-matchedFloating :: RealFloat floating => (floating -> Either Text a) -> Number a
+matchedFloating :: (RealFloat floating) => (floating -> Either Text a) -> Number a
 matchedFloating matcher = Number $ case floating of
   Number parser -> parser >>= either (throwError . Last . Just) return . matcher
 
