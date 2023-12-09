@@ -5,10 +5,10 @@ import qualified Data.Text as Text
 
 data Error
   = Error
+      -- | Path
       [Text]
-      -- ^ Path
+      -- | Message
       Text
-      -- ^ Message
 
 instance Semigroup Error where
   (<>) _ b = b

@@ -146,68 +146,77 @@ parseByteString p bs =
 
 {-# INLINE array #-}
 array :: Array a -> Value a
-array (Array parser) = Value $
-  ReaderT $ \case
+array (Array parser) = Value
+  $ ReaderT
+  $ \case
     Aeson.Array x -> lift $ join $ runExcept $ runExceptT $ runReaderT parser x
     _ -> empty
 
 {-# INLINE object #-}
 object :: Object a -> Value a
-object (Object parser) = Value $
-  ReaderT $ \case
+object (Object parser) = Value
+  $ ReaderT
+  $ \case
     Aeson.Object x -> lift $ join $ runExcept $ runExceptT $ runReaderT parser x
     _ -> empty
 
 {-# INLINE null #-}
 null :: Value ()
-null = Value $
-  ReaderT $ \case
+null = Value
+  $ ReaderT
+  $ \case
     Aeson.Null -> pure ()
     _ -> empty
 
 {-# INLINE nullable #-}
 nullable :: Value a -> Value (Maybe a)
-nullable (Value parser) = Value $
-  ReaderT $ \case
+nullable (Value parser) = Value
+  $ ReaderT
+  $ \case
     Aeson.Null -> pure Nothing
     x -> fmap Just (runReaderT parser x)
 
 {-# INLINE nullableMonoid #-}
 nullableMonoid :: (Monoid a) => Value a -> Value a
-nullableMonoid (Value parser) = Value $
-  ReaderT $ \case
+nullableMonoid (Value parser) = Value
+  $ ReaderT
+  $ \case
     Aeson.Null -> pure mempty
     x -> runReaderT parser x
 
 {-# INLINE string #-}
 string :: String a -> Value a
-string (String parser) = Value $
-  ReaderT $ \case
+string (String parser) = Value
+  $ ReaderT
+  $ \case
     Aeson.String x -> lift $ left (Error.message . fromMaybe "No details" . getLast) $ runExcept $ runReaderT parser x
     _ -> empty
 
 {-# INLINE number #-}
 number :: Number a -> Value a
-number (Number parser) = Value $
-  ReaderT $ \case
+number (Number parser) = Value
+  $ ReaderT
+  $ \case
     Aeson.Number x -> lift $ left (Error.message . fromMaybe "No details" . getLast) $ runExcept $ runReaderT parser x
     _ -> empty
 
 {-# INLINE bool #-}
 bool :: Value Bool
-bool = Value $
-  ReaderT $ \case
+bool = Value
+  $ ReaderT
+  $ \case
     Aeson.Bool x -> return x
     _ -> empty
 
 {-# INLINE fromJSON #-}
 fromJSON :: (Aeson.FromJSON a) => Value a
 fromJSON =
-  Value $
-    ReaderT $
-      Aeson.fromJSON >>> \case
-        Aeson.Success r -> return r
-        Aeson.Error m -> lift $ Left $ fromString m
+  Value
+    $ ReaderT
+    $ Aeson.fromJSON
+    >>> \case
+      Aeson.Success r -> return r
+      Aeson.Error m -> lift $ Left $ fromString m
 
 -- * String parsers
 
@@ -268,8 +277,9 @@ scientific = Number ask
 
 {-# INLINE integer #-}
 integer :: (Integral a, Bounded a) => Number a
-integer = Number $
-  ReaderT $ \x ->
+integer = Number
+  $ ReaderT
+  $ \x ->
     if Scientific.isInteger x
       then case Scientific.toBoundedInteger x of
         Just int -> return int
@@ -278,8 +288,9 @@ integer = Number $
 
 {-# INLINE floating #-}
 floating :: (RealFloat a) => Number a
-floating = Number $
-  ReaderT $ \a -> case Scientific.toBoundedRealFloat a of
+floating = Number
+  $ ReaderT
+  $ \a -> case Scientific.toBoundedRealFloat a of
     Right b -> return b
     Left c ->
       if c == 0
@@ -313,8 +324,9 @@ instance MonadFail Object where
 
 {-# INLINE field #-}
 field :: Text -> Value a -> Object a
-field name fieldParser = Object $
-  ReaderT $ \object -> case KeyMap.lookup (Key.fromText name) object of
+field name fieldParser = Object
+  $ ReaderT
+  $ \object -> case KeyMap.lookup (Key.fromText name) object of
     Just value -> case run fieldParser value of
       Right parsedValue -> return parsedValue
       Left error -> lift $ throwE $ Error.named name error
@@ -342,8 +354,9 @@ fieldMap keyParser fieldParser = Object $ ReaderT $ fmap HashMap.fromList . trav
 
 {-# INLINE foldlFields #-}
 foldlFields :: (state -> key -> field -> state) -> state -> String key -> Value field -> Object state
-foldlFields step state keyParser fieldParser = Object $
-  ReaderT $ \object ->
+foldlFields step state keyParser fieldParser = Object
+  $ ReaderT
+  $ \object ->
     KeyMap.foldrWithKey newStep pure object state
   where
     newStep key value next !state =
@@ -370,8 +383,9 @@ instance MonadFail Array where
 
 {-# INLINE element #-}
 element :: Int -> Value a -> Array a
-element index elementParser = Array $
-  ReaderT $ \array -> case array Vector.!? index of
+element index elementParser = Array
+  $ ReaderT
+  $ \array -> case array Vector.!? index of
     Just element -> case run elementParser element of
       Right result -> return result
       Left error -> lift $ throwE $ Error.indexed index error
@@ -379,8 +393,9 @@ element index elementParser = Array $
 
 {-# INLINE elementVector #-}
 elementVector :: Value a -> Array (Vector a)
-elementVector elementParser = Array $
-  ReaderT $ \arrayAst -> flip Vector.imapM arrayAst $ \index ast -> case run elementParser ast of
+elementVector elementParser = Array
+  $ ReaderT
+  $ \arrayAst -> flip Vector.imapM arrayAst $ \index ast -> case run elementParser ast of
     Right element -> return element
     Left error -> lift $ throwE $ Error.indexed index error
 
